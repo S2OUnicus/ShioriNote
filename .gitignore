@@ -1,0 +1,30 @@
+# Local/editor files
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+
+# Dependency and environment files
+/vendor/
+.env
+
+# Private runtime configuration
+/config/base.inc.phtml
+/public/.user.ini
+
+# Local database files and private SQL dumps
+/database/
+*.sql.gz
+*.dump
+*.backup
+
+# Runtime uploads
+/public/upload/avatar/*
+!/public/upload/avatar/.gitkeep
+!/public/upload/avatar/default-avatar.svg
+/public/upload/book/*
+!/public/upload/book/.gitkeep
+!/public/upload/book/default-cover.svg

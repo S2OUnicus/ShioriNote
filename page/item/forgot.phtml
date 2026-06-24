@@ -1,0 +1,20 @@
+<?php
+$pageDescription = 'パスワード再設定リクエストページです。';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    $login = trim((string)($_POST['login'] ?? ''));
+    if ($login !== '') {
+        $stmt = db()->prepare('SELECT uid,email FROM users WHERE uid = ? OR login_id = ? OR email = ? LIMIT 1');
+        $stmt->execute([(int)$login, $login, $login]);
+        $user = $stmt->fetch();
+        if ($user) {
+            $token = bin2hex(random_bytes(32));
+            $tokenHash = hash('sha256', $token);
+            $stmt = db()->prepare('INSERT INTO password_reset_tokens(uid, token_hash, expires_at_utc, created_at_utc) VALUES(?, ?, DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 30 MINUTE), UTC_TIMESTAMP(6))');
+            $stmt->execute([(int)$user['uid'], $tokenHash]);
+            // v0.1.2ではメール送信基盤を未同梱。tokenはDBに保存し、運用側SMTP実装で送信してください。
+        }
+    }
+    app_flash('success', '登録済み情報と一致する場合、パスワード再設定の案内を送信します。');
+}
+?><section class="uk-card uk-card-default uk-card-body rpm-card rpm-login-card"><h1>パスワード忘れ</h1><p class="rpm-muted">UID、ID、メールのいずれかを入力してください。セキュリティのため、登録有無は表示しません。</p><form method="post" action="<?php echo e(url_for('forgot')); ?>"><?php echo csrf_field(); ?><div class="uk-margin"><label>UID / ID / メール<input class="uk-input" name="login" required></label></div><button class="uk-button uk-button-primary" type="submit">再設定案内を送信</button></form></section>

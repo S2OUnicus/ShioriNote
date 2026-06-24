@@ -1,0 +1,610 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * ShioriNote v1.0.2
+ * Sample global config. Copy this file to config/base.inc.phtml before running.
+ * Never commit your real config/base.inc.phtml to GitHub.
+ */
+
+if (!defined('APP_ROOT')) {
+    define('APP_ROOT', dirname(__DIR__));
+}
+
+$BASE_CONFIG = [
+    'version' => '1.0.2',
+    'site_name' => 'しおりノート',
+    'author' => 'ShioriNote Project',
+    'theme_color' => '#6E1E51',
+    'description_default' => '図書ごと・ユーザーごとの読書進展を、目次・メモ・グラフでやさしく管理するサイトです。',
+    'default_timezone' => 'Asia/Tokyo',
+    'admin_panel_path' => getenv('SN_ADMIN_PANEL_PATH') ?: (getenv('RPM_ADMIN_PANEL_PATH') ?: '9KG0dYvgI1K4aOGbLbHH5Z'),
+    'registration_enabled' => false,
+    'rewrite_enabled' => true,
+    'progress_time_bucket' => 'daily',
+    'uploads' => [
+        'avatar_dir' => APP_ROOT . '/public/upload/avatar',
+        'book_dir' => APP_ROOT . '/public/upload/book',
+        'max_image_bytes' => 2 * 1024 * 1024,
+        'max_toc_bytes' => 1024 * 1024,
+    ],
+    'db' => [
+        'host' => getenv('RPM_DB_HOST') ?: '127.0.0.1',
+        'port' => (int)(getenv('RPM_DB_PORT') ?: 3306),
+        'name' => getenv('SN_DB_NAME') ?: (getenv('RPM_DB_NAME') ?: 'shiorinote'),
+        'user' => getenv('SN_DB_USER') ?: (getenv('RPM_DB_USER') ?: 'shiorinote_user'),
+        'pass' => getenv('SN_DB_PASS') ?: (getenv('RPM_DB_PASS') ?: 'change_me'),
+        'charset' => 'utf8mb4',
+    ],
+];
+
+function app_config(?string $key = null, mixed $default = null): mixed
+{
+    global $BASE_CONFIG;
+    if ($key === null) {
+        return $BASE_CONFIG;
+    }
+    return $BASE_CONFIG[$key] ?? $default;
+}
+
+function app_bootstrap(): void
+{
+    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'domain' => '',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+        session_name('shiorinote_session');
+        session_start();
+    }
+    app_send_security_headers();
+    date_default_timezone_set(setting('default_timezone', app_config('default_timezone')));
+}
+
+function app_send_security_headers(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+    header('X-Frame-Options: SAMEORIGIN');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://cdnjs.cloudflare.com; connect-src 'self'; base-uri 'self'; form-action 'self'");
+}
+
+function db(): PDO
+{
+    static $pdo = null;
+    if ($pdo instanceof PDO) {
+        return $pdo;
+    }
+    $db = app_config('db');
+    $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset']);
+    $pdo = new PDO($dsn, $db['user'], $db['pass'], [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ]);
+    return $pdo;
+}
+
+function table_exists(string $table): bool
+{
+    try {
+        $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
+        $stmt->execute([$table]);
+        return (int)$stmt->fetchColumn() > 0;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function setting(string $key, mixed $default = null): mixed
+{
+    static $cache = [];
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $fallback = app_config($key, $default);
+    try {
+        if (!table_exists('site_settings')) {
+            return $cache[$key] = $fallback;
+        }
+        $stmt = db()->prepare('SELECT setting_value FROM site_settings WHERE setting_key = ? LIMIT 1');
+        $stmt->execute([$key]);
+        $value = $stmt->fetchColumn();
+        if ($value === false) {
+            return $cache[$key] = $fallback;
+        }
+        if (is_bool($fallback)) {
+            return $cache[$key] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+        }
+        return $cache[$key] = $value;
+    } catch (Throwable) {
+        return $cache[$key] = $fallback;
+    }
+}
+
+function save_setting(string $key, string $value): void
+{
+    $stmt = db()->prepare('INSERT INTO site_settings(setting_key, setting_value, updated_at_utc) VALUES(?, ?, UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at_utc = UTC_TIMESTAMP(6)');
+    $stmt->execute([$key, $value]);
+}
+
+function e(mixed $value): string
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function app_flash(string $type, string $message): void
+{
+    $_SESSION['flash'][] = ['type' => $type, 'message' => $message];
+}
+
+function app_get_flash(): array
+{
+    $flash = $_SESSION['flash'] ?? [];
+    unset($_SESSION['flash']);
+    return $flash;
+}
+
+function csrf_token(): string
+{
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function csrf_field(): string
+{
+    return '<input type="hidden" name="csrf_token" value="' . e(csrf_token()) . '">';
+}
+
+function verify_csrf(): void
+{
+    $token = $_POST['csrf_token'] ?? '';
+    if (!is_string($token) || !hash_equals($_SESSION['csrf_token'] ?? '', $token)) {
+        http_response_code(400);
+        throw new RuntimeException('CSRF検証に失敗しました。ページを再読み込みして、もう一度お試しください。');
+    }
+}
+
+function admin_panel_path(): string
+{
+    $path = trim((string)app_config('admin_panel_path', '9KG0dYvgI1K4aOGbLbHH5Z'), '/');
+    $path = preg_replace('/[^A-Za-z0-9_\-\/]/', '', $path) ?: '9KG0dYvgI1K4aOGbLbHH5Z';
+    $path = trim($path, '/');
+    return $path !== '' ? $path : '9KG0dYvgI1K4aOGbLbHH5Z';
+}
+
+function registration_enabled(): bool
+{
+    return (bool)setting('registration_enabled', app_config('registration_enabled', false));
+}
+
+function app_route(): array
+{
+    $route = $_GET['r'] ?? null;
+    if (!is_string($route) || $route === '') {
+        $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+        $scriptDir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+        if ($scriptDir !== '' && $scriptDir !== '/' && str_starts_with($path, $scriptDir)) {
+            $path = substr($path, strlen($scriptDir));
+        }
+        $route = trim($path, '/');
+    }
+    $route = trim($route, '/');
+    if ($route === '') {
+        return ['name' => 'index', 'id' => null, 'raw' => '', 'is_admin_path' => false];
+    }
+    if (hash_equals(admin_panel_path(), $route)) {
+        return ['name' => 'admin', 'id' => null, 'raw' => $route, 'is_admin_path' => true];
+    }
+    $parts = explode('/', $route);
+    $name = preg_replace('/[^a-z0-9_-]/i', '', $parts[0] ?? 'index') ?: 'index';
+    if ($name === 'admin') {
+        $name = 'not_found';
+    }
+    return ['name' => $name, 'id' => isset($parts[1]) ? (int)$parts[1] : (isset($_GET['id']) ? (int)$_GET['id'] : null), 'raw' => $route, 'is_admin_path' => false];
+}
+
+function url_for(string $route = 'index', array $params = []): string
+{
+    $rewrite = setting('rewrite_enabled', true);
+    $route = trim($route, '/');
+    $id = $params['id'] ?? null;
+    unset($params['id']);
+    if ($route === 'admin') {
+        $path = '/' . admin_panel_path();
+        if ($params) {
+            $path .= '?' . http_build_query($params);
+        }
+        return $path;
+    }
+    if ($rewrite) {
+        $path = '/' . ($route === 'index' ? '' : $route);
+        if ($id !== null) {
+            $path .= '/' . rawurlencode((string)$id);
+        }
+        if ($params) {
+            $path .= '?' . http_build_query($params);
+        }
+        return $path;
+    }
+    $query = ['r' => $route === '' ? 'index' : $route] + ($id !== null ? ['id' => $id] : []) + $params;
+    return '/index.php?' . http_build_query($query);
+}
+
+function redirect_to(string $route, array $params = []): never
+{
+    header('Location: ' . url_for($route, $params));
+    exit;
+}
+
+function current_user(): ?array
+{
+    static $user = null;
+    static $loaded = false;
+    if ($loaded) {
+        return $user;
+    }
+    $loaded = true;
+    $uid = $_SESSION['uid'] ?? null;
+    if (!$uid) {
+        return $user = null;
+    }
+    try {
+        $stmt = db()->prepare('SELECT * FROM users WHERE uid = ? LIMIT 1');
+        $stmt->execute([(int)$uid]);
+        $row = $stmt->fetch();
+        return $user = $row ?: null;
+    } catch (Throwable) {
+        return $user = null;
+    }
+}
+
+function is_logged_in(): bool
+{
+    return current_user() !== null;
+}
+
+function role_rank(string $role): int
+{
+    return match ($role) {
+        'developer' => 100,
+        'super_admin' => 90,
+        'admin' => 70,
+        'user' => 10,
+        'banned' => -100,
+        default => 0,
+    };
+}
+
+function require_login(): array
+{
+    $user = current_user();
+    if (!$user) {
+        app_flash('warning', 'ログインが必要です。');
+        redirect_to('login');
+    }
+    return $user;
+}
+
+function require_not_banned(): array
+{
+    $user = require_login();
+    if (($user['role'] ?? '') === 'banned' || ($user['status'] ?? '') !== 'active') {
+        http_response_code(403);
+        throw new RuntimeException('このアカウントは現在、進展管理を利用できません。データは削除されていません。');
+    }
+    return $user;
+}
+
+function require_role(array $allowed): array
+{
+    $user = require_login();
+    if (!in_array($user['role'], $allowed, true)) {
+        http_response_code(403);
+        throw new RuntimeException('この機能を利用する権限がありません。');
+    }
+    return $user;
+}
+
+function can_admin(?array $user = null): bool
+{
+    $user ??= current_user();
+    return $user && in_array($user['role'], ['developer', 'super_admin', 'admin'], true);
+}
+
+function can_site_settings(?array $user = null): bool
+{
+    $user ??= current_user();
+    return $user && in_array($user['role'], ['developer', 'super_admin'], true);
+}
+
+function create_password_bundle(string $password, ?string $salt = null): array
+{
+    $salt ??= random_bytes(32);
+    $hash = password_hash($salt . $password, PASSWORD_ARGON2ID, [
+        'memory_cost' => PASSWORD_ARGON2_DEFAULT_MEMORY_COST,
+        'time_cost' => PASSWORD_ARGON2_DEFAULT_TIME_COST,
+        'threads' => PASSWORD_ARGON2_DEFAULT_THREADS,
+    ]);
+    if ($hash === false) {
+        throw new RuntimeException('パスワードハッシュを作成できませんでした。');
+    }
+    return ['salt' => $salt, 'hash' => $hash];
+}
+
+function verify_password_bundle(string $password, string $salt, string $hash): bool
+{
+    return password_verify($salt . $password, $hash);
+}
+
+function clean_text(string $text, int $max = 2000): string
+{
+    $text = trim(str_replace(["\0"], '', $text));
+    if (mb_strlen($text, 'UTF-8') > $max) {
+        $text = mb_substr($text, 0, $max, 'UTF-8');
+    }
+    return $text;
+}
+
+function clean_url(string $url): string
+{
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        throw new InvalidArgumentException('リンクURLの形式が正しくありません。');
+    }
+    $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+    if (!in_array($scheme, ['http', 'https'], true)) {
+        throw new InvalidArgumentException('リンクURLは http または https のみ利用できます。');
+    }
+    return $url;
+}
+
+function user_timezone(?array $user = null): DateTimeZone
+{
+    $user ??= current_user();
+    $tz = $user['timezone'] ?? setting('default_timezone', app_config('default_timezone'));
+    try {
+        return new DateTimeZone((string)$tz);
+    } catch (Throwable) {
+        return new DateTimeZone('Asia/Tokyo');
+    }
+}
+
+function utc_to_user(?string $utc, ?array $user = null, string $format = 'Y-m-d H:i'): string
+{
+    if (!$utc) {
+        return '';
+    }
+    $dt = new DateTimeImmutable($utc, new DateTimeZone('UTC'));
+    return $dt->setTimezone(user_timezone($user))->format($format);
+}
+
+function user_local_to_utc(?string $local, ?array $user = null): ?string
+{
+    $local = trim((string)$local);
+    if ($local === '') {
+        return null;
+    }
+    $dt = new DateTimeImmutable($local, user_timezone($user));
+    return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s.u');
+}
+
+function utc_now(): string
+{
+    return (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s.u');
+}
+
+function safe_image_upload(array $file, string $dir, string $prefix): ?string
+{
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('画像アップロードに失敗しました。');
+    }
+    if (($file['size'] ?? 0) > app_config('uploads')['max_image_bytes']) {
+        throw new RuntimeException('画像サイズは2MB以内にしてください。');
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($file['tmp_name']);
+    $ext = match ($mime) {
+        'image/png' => 'png',
+        'image/jpeg' => 'jpg',
+        'image/webp' => 'webp',
+        default => throw new RuntimeException('画像は PNG/JPEG/WebP のみ利用できます。'),
+    };
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        throw new RuntimeException('アップロード先フォルダを作成できません。');
+    }
+    $name = $prefix . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+    $dest = rtrim($dir, '/') . '/' . $name;
+    if (!move_uploaded_file($file['tmp_name'], $dest)) {
+        throw new RuntimeException('画像を保存できませんでした。');
+    }
+    return str_replace(APP_ROOT . '/public', '', $dest);
+}
+
+function get_book(int $id): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM books WHERE book_id = ? LIMIT 1');
+    $stmt->execute([$id]);
+    $book = $stmt->fetch();
+    return $book ?: null;
+}
+
+function get_book_toc(int $bookId): array
+{
+    $stmt = db()->prepare('SELECT * FROM book_toc WHERE book_id = ? ORDER BY sort_order ASC, toc_id ASC');
+    $stmt->execute([$bookId]);
+    return toc_with_numbering($stmt->fetchAll());
+}
+
+function toc_level_name(int $level): string
+{
+    return match ($level) {
+        1 => '章',
+        2 => '節',
+        default => '小節',
+    };
+}
+
+function toc_plain_title(string $title): string
+{
+    $title = trim($title);
+    $patterns = [
+        '/^第\s*[0-9０-９一二三四五六七八九十百千万萬]+\s*(章|節|小節)\s*[：:、.．・\-－]?\s*/u',
+        '/^(?:[0-9０-９]+(?:[\.．・\-－][0-9０-９]+)+|[0-9０-９]+\s*[\)）\]】、.．:：\-－])\s*/u',
+    ];
+    foreach ($patterns as $pattern) {
+        $cleaned = preg_replace($pattern, '', $title);
+        if (is_string($cleaned) && trim($cleaned) !== '') {
+            $title = trim($cleaned);
+        }
+    }
+    return $title;
+}
+
+function toc_with_numbering(array $toc): array
+{
+    $counters = [1 => 0, 2 => 0, 3 => 0];
+    $numbered = [];
+    foreach ($toc as $item) {
+        $level = max(1, min(3, (int)($item['level'] ?? 1)));
+        if ($level === 1) {
+            $counters[1]++;
+            $counters[2] = 0;
+            $counters[3] = 0;
+        } elseif ($level === 2) {
+            if ($counters[1] === 0) {
+                $counters[1] = 1;
+            }
+            $counters[2]++;
+            $counters[3] = 0;
+        } else {
+            if ($counters[1] === 0) {
+                $counters[1] = 1;
+            }
+            if ($counters[2] === 0) {
+                $counters[2] = 1;
+            }
+            $counters[3]++;
+        }
+        $plain = toc_plain_title((string)($item['title'] ?? ''));
+        $prefix = '第 ' . $counters[$level] . ' ' . toc_level_name($level);
+        $item['level'] = $level;
+        $item['plain_title'] = $plain;
+        $item['display_prefix'] = $prefix;
+        $item['display_title'] = trim($prefix . ' ' . $plain);
+        $numbered[] = $item;
+    }
+    return $numbered;
+}
+
+function target_toc_level(string $unit): int
+{
+    return match ($unit) {
+        'chapter' => 1,
+        'subsection' => 3,
+        default => 2,
+    };
+}
+
+function target_toc_items(array $toc, string $unit): array
+{
+    $level = target_toc_level($unit);
+    $items = array_values(array_filter($toc, fn($x) => (int)$x['level'] === $level));
+    if (!$items && $level === 3) {
+        $items = array_values(array_filter($toc, fn($x) => (int)$x['level'] === 2));
+    }
+    if (!$items && $level >= 2) {
+        $items = array_values(array_filter($toc, fn($x) => (int)$x['level'] === 1));
+    }
+    return $items;
+}
+
+function compute_overall_percent(array $targetItems, array $progressByToc): float
+{
+    if (!$targetItems) {
+        return 0.0;
+    }
+    $sum = 0;
+    foreach ($targetItems as $item) {
+        $sum += (int)($progressByToc[(int)$item['toc_id']]['percent'] ?? 0);
+    }
+    return round($sum / count($targetItems), 2);
+}
+
+function fetch_progress_by_toc(int $uid, int $bookId): array
+{
+    $stmt = db()->prepare('SELECT * FROM user_toc_progress WHERE uid = ? AND book_id = ?');
+    $stmt->execute([$uid, $bookId]);
+    $map = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $map[(int)$row['toc_id']] = $row;
+    }
+    return $map;
+}
+
+function ensure_user_book_progress(int $uid, int $bookId): array
+{
+    $stmt = db()->prepare('SELECT * FROM user_book_progress WHERE uid = ? AND book_id = ? LIMIT 1');
+    $stmt->execute([$uid, $bookId]);
+    $row = $stmt->fetch();
+    if ($row) {
+        return $row;
+    }
+    $stmt = db()->prepare('INSERT INTO user_book_progress(uid, book_id, start_at_utc, created_at_utc, updated_at_utc) VALUES(?, ?, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))');
+    $stmt->execute([$uid, $bookId]);
+    $stmt = db()->prepare('SELECT * FROM user_book_progress WHERE uid = ? AND book_id = ? LIMIT 1');
+    $stmt->execute([$uid, $bookId]);
+    return $stmt->fetch();
+}
+
+function page_title(string $title): string
+{
+    return $title . '｜' . setting('site_name', app_config('site_name'));
+}
+
+function render_flash(): void
+{
+    foreach (app_get_flash() as $f) {
+        $type = e($f['type']);
+        $msg = e($f['message']);
+        echo "<div class=\"uk-alert-$type\" uk-alert><a class=\"uk-alert-close\" uk-close></a><p>$msg</p></div>";
+    }
+}
+
+function minify_html_output(string $html): string
+{
+    $keep = [];
+    $html = preg_replace_callback('/<(pre|textarea)\b[^>]*>.*?<\/\1>/is', function (array $m) use (&$keep): string {
+        $key = '%%RPM_KEEP_' . count($keep) . '%%';
+        $keep[$key] = $m[0];
+        return $key;
+    }, $html) ?? $html;
+    $html = preg_replace('/<!--(?!\[if).*?-->/s', '', $html) ?? $html;
+    $html = preg_replace('/>\s+</', '><', $html) ?? $html;
+    $html = preg_replace('/\s{2,}/', ' ', $html) ?? $html;
+    $html = trim($html);
+    return strtr($html, $keep);
+}
+
+function start_minify(): void
+{
+    ob_start('minify_html_output');
+}
+?>

@@ -1,0 +1,129 @@
+<?php
+$admin = require_role(['developer', 'super_admin', 'admin']);
+$pageDescription = 'サイト基本管理、ユーザー管理、図書管理、ユーザー別進展管理、その他を行います。';
+if (!function_exists('parse_toc_text')) {
+    function parse_toc_text(string $text): array
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $rows = [];
+        foreach ($lines as $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+            $raw = str_replace("\t", '    ', rtrim($line));
+            $leading = strlen($raw) - strlen(ltrim($raw, ' '));
+            $level = $leading === 0 ? 1 : ($leading < 8 ? 2 : 3);
+            $title = trim(preg_replace('/^(?:#{1,6}\s*|[-*]\s*)/u', '', trim($raw)) ?? trim($raw));
+            if ($title === '') {
+                continue;
+            }
+            $rows[] = ['level' => $level, 'title' => clean_text($title, 255)];
+        }
+        return $rows;
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    $action = (string)($_POST['action'] ?? '');
+    if ($action === 'settings') {
+        require_role(['developer', 'super_admin']);
+        save_setting('site_name', clean_text((string)($_POST['site_name'] ?? ''), 120));
+        save_setting('author', clean_text((string)($_POST['author'] ?? ''), 120));
+        $theme = preg_match('/^#[0-9A-Fa-f]{6}$/', (string)($_POST['theme_color'] ?? '')) ? (string)$_POST['theme_color'] : '#6E1E51';
+        save_setting('theme_color', $theme);
+        $tz = in_array((string)($_POST['default_timezone'] ?? ''), timezone_identifiers_list(), true) ? (string)$_POST['default_timezone'] : 'Asia/Tokyo';
+        save_setting('default_timezone', $tz);
+        save_setting('rewrite_enabled', isset($_POST['rewrite_enabled']) ? 'true' : 'false');
+        save_setting('registration_enabled', isset($_POST['registration_enabled']) ? 'true' : 'false');
+        save_setting('progress_time_bucket', ($_POST['progress_time_bucket'] ?? 'daily') === 'hourly' ? 'hourly' : 'daily');
+        app_flash('success', 'サイト基本設定を保存しました。');
+        redirect_to('admin');
+    }
+    if ($action === 'create_book') {
+        $title = clean_text((string)($_POST['title'] ?? ''), 255);
+        if ($title === '') {
+            app_flash('danger', '図書名は必須です。');
+        } else {
+            $author = clean_text((string)($_POST['author'] ?? ''), 255);
+            $publisher = clean_text((string)($_POST['publisher'] ?? ''), 255);
+            $memo = clean_text((string)($_POST['memo'] ?? ''), 4000);
+            $unit = in_array((string)($_POST['progress_unit'] ?? 'section'), ['chapter','section','subsection'], true) ? (string)$_POST['progress_unit'] : 'section';
+            $cover = safe_image_upload($_FILES['cover'] ?? [], app_config('uploads')['book_dir'], 'book') ?? '';
+            $stmt = db()->prepare('INSERT INTO books(title,author,publisher,cover_path,memo,progress_unit,created_by,created_at_utc,updated_at_utc) VALUES(?,?,?,?,?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))');
+            $stmt->execute([$title, $author, $publisher, $cover, $memo, $unit, (int)$admin['uid']]);
+            app_flash('success', '図書を追加しました。続けて目次を導入できます。');
+            redirect_to('admin', ['book_created' => (int)db()->lastInsertId()]);
+        }
+    }
+    if ($action === 'import_toc') {
+        $bookId = (int)($_POST['book_id'] ?? 0);
+        $book = get_book($bookId);
+        if (!$book) {
+            app_flash('danger', '図書が見つかりません。');
+        } elseif (($_FILES['toc_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            app_flash('danger', '目次ファイルを選択してください。');
+        } elseif (($_FILES['toc_file']['size'] ?? 0) > app_config('uploads')['max_toc_bytes']) {
+            app_flash('danger', '目次ファイルは1MB以内にしてください。');
+        } else {
+            $name = (string)($_FILES['toc_file']['name'] ?? '');
+            $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['txt','md'], true)) {
+                app_flash('danger', '目次ファイルは .txt または .md のみ利用できます。');
+            } else {
+                $text = file_get_contents($_FILES['toc_file']['tmp_name']);
+                if ($text === false) {
+                    throw new RuntimeException('目次ファイルを読み込めません。');
+                }
+                $rows = parse_toc_text($text);
+                if (!$rows) {
+                    app_flash('danger', '導入できる目次行がありません。');
+                } else {
+                    db()->beginTransaction();
+                    try {
+                        $stmt = db()->prepare('DELETE FROM book_toc WHERE book_id = ?');
+                        $stmt->execute([$bookId]);
+                        $parents = [0 => null, 1 => null, 2 => null, 3 => null];
+                        $sort = 10;
+                        foreach ($rows as $row) {
+                            $level = (int)$row['level'];
+                            $parentId = $level === 1 ? null : ($parents[$level - 1] ?? null);
+                            if ($level > 1 && $parentId === null) {
+                                $level = 1;
+                            }
+                            $stmt = db()->prepare('INSERT INTO book_toc(book_id,parent_id,level,sort_order,title,created_at_utc) VALUES(?,?,?,?,?,UTC_TIMESTAMP(6))');
+                            $stmt->execute([$bookId, $parentId, $level, $sort, $row['title']]);
+                            $parents[$level] = (int)db()->lastInsertId();
+                            for ($i = $level + 1; $i <= 3; $i++) { $parents[$i] = null; }
+                            $sort += 10;
+                        }
+                        db()->commit();
+                        app_flash('success', '目次を導入しました。');
+                        redirect_to('admin');
+                    } catch (Throwable $e) {
+                        db()->rollBack();
+                        throw $e;
+                    }
+                }
+            }
+        }
+    }
+    if ($action === 'update_user') {
+        $targetUid = (int)($_POST['uid'] ?? 0);
+        $role = in_array((string)($_POST['role'] ?? 'user'), ['developer','super_admin','admin','user','banned'], true) ? (string)$_POST['role'] : 'user';
+        $status = in_array((string)($_POST['status'] ?? 'active'), ['active','suspended'], true) ? (string)$_POST['status'] : 'active';
+        if (role_rank($admin['role']) < 90 && $role !== 'user' && $role !== 'banned') {
+            app_flash('danger', '管理者は上位権限を付与できません。');
+        } else {
+            $stmt = db()->prepare('UPDATE users SET role=?, status=?, updated_at_utc=UTC_TIMESTAMP(6) WHERE uid=?');
+            $stmt->execute([$role, $status, $targetUid]);
+            app_flash('success', 'ユーザー権限を更新しました。');
+            redirect_to('admin');
+        }
+    }
+}
+$users = db()->query('SELECT uid,login_id,email,nickname,avatar_path,timezone,role,status,last_login_at_utc,created_at_utc FROM users ORDER BY uid ASC LIMIT 200')->fetchAll();
+$books = db()->query('SELECT b.*, COUNT(t.toc_id) AS toc_count FROM books b LEFT JOIN book_toc t ON t.book_id=b.book_id GROUP BY b.book_id ORDER BY b.book_id DESC LIMIT 200')->fetchAll();
+$progressRows = db()->query('SELECT p.uid,u.login_id,b.title,p.book_id,p.start_at_utc,p.completed_at_utc,p.updated_at_utc FROM user_book_progress p JOIN users u ON u.uid=p.uid JOIN books b ON b.book_id=p.book_id ORDER BY p.updated_at_utc DESC LIMIT 100')->fetchAll();
+$tzs = timezone_identifiers_list();
+?><section class="uk-margin-bottom"><h1>管理システム</h1><p class="rpm-muted">サイト基本管理、ユーザー管理、図書管理、ユーザー別進展管理、その他。</p></section><div class="rpm-admin-layout"><aside class="rpm-admin-menu"><ul class="uk-nav uk-nav-default"><li class="uk-nav-header">メニュー</li><li><a href="#site">サイト基本管理</a></li><li><a href="#users">ユーザー管理</a></li><li><a href="#books">図書管理</a></li><li><a href="#progress-admin">ユーザー別進展管理</a></li><li><a href="#other">その他</a></li></ul></aside><div><section id="site" class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>サイト基本管理</h2><?php if (!can_site_settings($admin)): ?><p class="uk-alert-warning">管理者はサイト基本設定を修正できません。</p><?php else: ?><form method="post" action="<?php echo e(url_for('admin')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="settings"><div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>サイト名<input class="uk-input" name="site_name" value="<?php echo e(setting('site_name', app_config('site_name'))); ?>"></label><label>author<input class="uk-input" name="author" value="<?php echo e(setting('author', app_config('author'))); ?>"></label><label>theme-color<input class="uk-input" name="theme_color" value="<?php echo e(setting('theme_color', app_config('theme_color'))); ?>" pattern="#[0-9A-Fa-f]{6}"></label><label>初期Timezone<select class="uk-select" name="default_timezone"><?php foreach ($tzs as $tz): ?><option value="<?php echo e($tz); ?>" <?php echo $tz === setting('default_timezone','Asia/Tokyo') ? 'selected' : ''; ?>><?php echo e($tz); ?></option><?php endforeach; ?></select></label><label>進展時間粒度<select class="uk-select" name="progress_time_bucket"><option value="daily" <?php echo setting('progress_time_bucket','daily') === 'daily' ? 'selected' : ''; ?>>日別</option><option value="hourly" <?php echo setting('progress_time_bucket','daily') === 'hourly' ? 'selected' : ''; ?>>時間別</option></select></label><label class="uk-flex uk-flex-middle"><input class="uk-checkbox uk-margin-small-right" type="checkbox" name="rewrite_enabled" <?php echo setting('rewrite_enabled', true) ? 'checked' : ''; ?>>rewriteを使う</label><label class="uk-flex uk-flex-middle"><input class="uk-checkbox uk-margin-small-right" type="checkbox" name="registration_enabled" <?php echo registration_enabled() ? 'checked' : ''; ?>>ユーザー新規登録を許可</label><div class="uk-width-1-1"><div class="uk-alert-primary">管理パネルの現在パス：<code>/<?php echo e(admin_panel_path()); ?></code><br>この値は <code>config/base.inc.phtml</code> の <code>admin_panel_path</code> で定義します。</div></div></div><button class="uk-button uk-button-primary uk-margin-top" type="submit">設定保存</button></form><?php endif; ?></section><section id="users" class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>ユーザー管理</h2><div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>UID</th><th>ID</th><th>メール</th><th>あだ名</th><th>Timezone</th><th>権限/状態</th><th>操作</th></tr></thead><tbody><?php foreach ($users as $u): ?><tr><td><?php echo e($u['uid']); ?></td><td><?php echo e($u['login_id']); ?></td><td><?php echo e($u['email']); ?></td><td><?php echo e($u['nickname']); ?></td><td><?php echo e($u['timezone']); ?></td><td><?php echo e($u['role']); ?> / <?php echo e($u['status']); ?></td><td><form class="uk-flex uk-flex-middle" style="gap:6px" method="post" action="<?php echo e(url_for('admin')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="update_user"><input type="hidden" name="uid" value="<?php echo e($u['uid']); ?>"><select class="uk-select uk-form-small" name="role"><option value="developer" <?php echo $u['role']==='developer'?'selected':''; ?>>開発者</option><option value="super_admin" <?php echo $u['role']==='super_admin'?'selected':''; ?>>総管理</option><option value="admin" <?php echo $u['role']==='admin'?'selected':''; ?>>管理者</option><option value="user" <?php echo $u['role']==='user'?'selected':''; ?>>ユーザー</option><option value="banned" <?php echo $u['role']==='banned'?'selected':''; ?>>禁止され</option></select><select class="uk-select uk-form-small" name="status"><option value="active" <?php echo $u['status']==='active'?'selected':''; ?>>active</option><option value="suspended" <?php echo $u['status']==='suspended'?'selected':''; ?>>suspended</option></select><button class="uk-button uk-button-default uk-button-small" type="submit">保存</button></form></td></tr><?php endforeach; ?></tbody></table></div></section><section id="books" class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>図書管理</h2><h3>図書追加</h3><form method="post" enctype="multipart/form-data" action="<?php echo e(url_for('admin')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="create_book"><div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>図書名<input class="uk-input" name="title" required></label><label>作者<input class="uk-input" name="author"></label><label>発行機関<input class="uk-input" name="publisher"></label><label>写真<input class="uk-input" type="file" name="cover" accept="image/png,image/jpeg,image/webp"></label><label>進展管理単位<select class="uk-select" name="progress_unit"><option value="section" selected>節</option><option value="chapter">章</option><option value="subsection">小節</option></select></label></div><div class="uk-margin"><label>メモ<textarea class="uk-textarea" name="memo" rows="3" maxlength="4000"></textarea></label></div><button class="uk-button uk-button-primary" type="submit">図書追加</button></form><hr><h3>目次導入（.txt / .md）</h3><p class="rpm-muted">フォーマット例：番号なしの章タイトル → インデントした節タイトル → さらにインデントした小節タイトル。画面では「第 1 章」「第 1 節」のように自動採番して表示します。既存目次は置き換えます。</p><form method="post" enctype="multipart/form-data" action="<?php echo e(url_for('admin')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="import_toc"><div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>対象図書<select class="uk-select" name="book_id"><?php foreach ($books as $b): ?><option value="<?php echo e($b['book_id']); ?>"><?php echo e($b['title']); ?>（目次<?php echo e($b['toc_count']); ?>件）</option><?php endforeach; ?></select></label><label>目次ファイル<input class="uk-input" type="file" name="toc_file" accept=".txt,.md,text/plain,text/markdown" required></label></div><button class="uk-button uk-button-primary uk-margin-top" type="submit">目次導入</button></form><hr><h3>登録図書</h3><div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>ID</th><th>図書名</th><th>作者</th><th>単位</th><th>目次</th><th>リンク</th></tr></thead><tbody><?php foreach ($books as $b): ?><tr><td><?php echo e($b['book_id']); ?></td><td><?php echo e($b['title']); ?></td><td><?php echo e($b['author']); ?></td><td><?php echo e($b['progress_unit']); ?></td><td><?php echo e($b['toc_count']); ?></td><td><a href="<?php echo e(url_for('book',['id'=>$b['book_id']])); ?>">紹介</a> / <a href="<?php echo e(url_for('progress',['id'=>$b['book_id']])); ?>">進展</a></td></tr><?php endforeach; ?></tbody></table></div></section><section id="progress-admin" class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>ユーザー別進展管理</h2><p class="rpm-muted">最近更新されたユーザー別進展を一覧表示します。詳細編集は各ユーザーの進展ページで行います。</p><div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>UID</th><th>ID</th><th>図書</th><th>開始</th><th>完結</th><th>更新</th></tr></thead><tbody><?php foreach ($progressRows as $p): ?><tr><td><?php echo e($p['uid']); ?></td><td><?php echo e($p['login_id']); ?></td><td><?php echo e($p['title']); ?></td><td><?php echo e($p['start_at_utc']); ?></td><td><?php echo e($p['completed_at_utc']); ?></td><td><?php echo e($p['updated_at_utc']); ?></td></tr><?php endforeach; ?></tbody></table></div></section><section id="other" class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>その他</h2><ul><li>HTML出力は出力バッファで一行圧縮します。</li><li>HTMXリクエスト時はmain部分のみ返します。</li><li>Nginx rewriteは deploy/nginx-shiorinote.conf を参照してください。</li></ul></section></div></div>

@@ -1,0 +1,37 @@
+<?php
+if (!registration_enabled()) {
+    http_response_code(403);
+    app_flash('warning', '新規登録は現在停止されています。管理者にお問い合わせください。');
+    redirect_to('login');
+}
+$pageDescription = '読書進展サイトの新規登録ページです。';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    $loginId = clean_text((string)($_POST['login_id'] ?? ''), 64);
+    $email = trim((string)($_POST['email'] ?? ''));
+    $password = (string)($_POST['password'] ?? '');
+    $nickname = clean_text((string)($_POST['nickname'] ?? ''), 80);
+    $bio = clean_text((string)($_POST['bio'] ?? ''), 2000);
+    $link = clean_url((string)($_POST['link_url'] ?? ''));
+    $timezone = in_array((string)($_POST['timezone'] ?? ''), timezone_identifiers_list(), true) ? (string)$_POST['timezone'] : setting('default_timezone', 'Asia/Tokyo');
+    if (!preg_match('/^[A-Za-z0-9_\-]{3,64}$/', $loginId)) {
+        app_flash('danger', 'IDは3〜64文字の英数字、_、- のみ利用できます。');
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        app_flash('danger', 'メール形式が正しくありません。');
+    } elseif (strlen($password) < 8) {
+        app_flash('danger', 'パスワードは8文字以上にしてください。');
+    } else {
+        $avatarPath = safe_image_upload($_FILES['avatar'] ?? [], app_config('uploads')['avatar_dir'], 'avatar') ?? '/upload/avatar/1.png';
+        $bundle = create_password_bundle($password);
+        try {
+            $stmt = db()->prepare('INSERT INTO users(login_id,email,password_salt,password_hash,nickname,avatar_path,bio,link_url,timezone,role,status,created_at_utc,updated_at_utc) VALUES(?,?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))');
+            $stmt->execute([$loginId, $email, $bundle['salt'], $bundle['hash'], $nickname ?: $loginId, $avatarPath, $bio, $link, $timezone, 'user', 'active']);
+            app_flash('success', '登録しました。ログインしてください。');
+            redirect_to('login');
+        } catch (PDOException) {
+            app_flash('danger', '同じIDまたはメールが既に登録されています。');
+        }
+    }
+}
+$tzs = timezone_identifiers_list();
+?><section class="uk-card uk-card-default uk-card-body rpm-card rpm-login-card"><h1>新規登録</h1><form method="post" enctype="multipart/form-data" action="<?php echo e(url_for('register')); ?>"><?php echo csrf_field(); ?><div class="uk-margin"><label>ID<input class="uk-input" name="login_id" required pattern="[A-Za-z0-9_\-]{3,64}"></label></div><div class="uk-margin"><label>メール<input class="uk-input" type="email" name="email" required></label></div><div class="uk-margin"><label>パスワード<input class="uk-input" type="password" name="password" minlength="8" required></label></div><div class="uk-margin"><label>あだ名<input class="uk-input" name="nickname"></label></div><div class="uk-margin"><label>アバター<input class="uk-input" type="file" name="avatar" accept="image/png,image/jpeg,image/webp"></label></div><div class="uk-margin"><label>個人紹介<textarea class="uk-textarea" name="bio" rows="4" maxlength="2000"></textarea></label></div><div class="uk-margin"><label>リンク<input class="uk-input" type="url" name="link_url" placeholder="https://example.com"></label></div><div class="uk-margin"><label>Timezone<select class="uk-select" name="timezone"><?php foreach ($tzs as $tz): ?><option value="<?php echo e($tz); ?>" <?php echo $tz === setting('default_timezone','Asia/Tokyo') ? 'selected' : ''; ?>><?php echo e($tz); ?></option><?php endforeach; ?></select></label></div><button class="uk-button uk-button-primary" type="submit">登録</button></form></section>

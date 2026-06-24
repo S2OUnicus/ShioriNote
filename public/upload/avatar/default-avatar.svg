@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="default avatar">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6E1E51"/>
+      <stop offset="1" stop-color="#C9A46B"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="72" fill="url(#g)"/>
+  <circle cx="128" cy="92" r="42" fill="#FFF7EA" opacity=".94"/>
+  <path d="M62 217c9-47 39-76 66-76s57 29 66 76" fill="#FFF7EA" opacity=".94"/>
+  <path d="M58 52c26-25 61-34 95-22 20 7 34 20 45 37" fill="none" stroke="#FFF7EA" stroke-width="10" stroke-linecap="round" opacity=".55"/>
+  <text x="128" y="235" text-anchor="middle" font-size="22" font-family="serif" fill="#FFF7EA">ShioriNote</text>
+</svg>
