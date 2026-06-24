@@ -147,7 +147,7 @@ if (!function_exists('sn_toc_children_by_parent')) {
     function sn_render_chart_zone(string $chartData, string $bucketType, bool $oob = false): void
     {
         $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
-        ?><section id="rpm-chart-zone" class="rpm-chart-grid uk-margin-large"<?php echo $oobAttr; ?>><script type="application/json" id="progress-chart-data"><?php echo $chartData; ?></script><?php sn_chart_card('章ごと完成度', 'chart-polar', 'modal-chart-polar', 'chart-polar-modal'); ?><?php sn_chart_card('章ごと残り', 'chart-stacked', 'modal-chart-stacked', 'chart-stacked-modal'); ?><?php sn_chart_card('進展まとめ', 'chart-mixed', 'modal-chart-mixed', 'chart-mixed-modal'); ?></section><?php
+        ?><section id="rpm-chart-zone" class="rpm-chart-grid uk-margin-large"<?php echo $oobAttr; ?>><template id="progress-chart-data"><?php echo $chartData; ?></template><?php sn_chart_card('章ごと完成度', 'chart-polar', 'modal-chart-polar', 'chart-polar-modal'); ?><?php sn_chart_card('章ごと残り', 'chart-stacked', 'modal-chart-stacked', 'chart-stacked-modal'); ?><?php sn_chart_card('進展まとめ', 'chart-mixed', 'modal-chart-mixed', 'chart-mixed-modal'); ?></section><?php
     }
 
     function sn_render_completed_input(array $user, array $bookProgress, bool $oob = false): void
@@ -182,7 +182,7 @@ if (!function_exists('sn_toc_children_by_parent')) {
     {
         $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
         $treeData = json_encode(sn_mindmap_tree_data($book, $toc), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
-        ?><details id="rpm-mindmap-summary" class="rpm-mindmap-summary uk-margin" open<?php echo $oobAttr; ?>><summary>マインドマップ</summary><p class="rpm-muted uk-margin-small-top">From Left to Right Tree</p><script type="application/json" id="rpm-mindmap-data"><?php echo $treeData; ?></script><div id="chart-mindmap" class="rpm-mindmap-chart"></div></details><?php
+        ?><details id="rpm-mindmap-summary" class="rpm-mindmap-summary uk-card uk-card-default uk-card-body rpm-card uk-margin" open<?php echo $oobAttr; ?>><summary>マインドマップ</summary><template id="rpm-mindmap-data"><?php echo $treeData; ?></template><div id="chart-mindmap" class="rpm-mindmap-chart" role="img" aria-label="目次マインドマップ"></div></details><?php
     }
 
     function sn_render_achievement_summary(array $summaryRows, string $bucketType, bool $oob = false): void

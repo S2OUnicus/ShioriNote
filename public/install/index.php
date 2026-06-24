@@ -155,8 +155,8 @@ function inst_make_config(array $cfg): string
     if ($tailPos === false) { throw new RuntimeException('base.sample.phtml の構造を読み取れません。'); }
     $tail = substr($sample, $tailPos);
     $db = $cfg['db'];
-    return "<?php\ndeclare(strict_types=1);\n\n/**\n * ShioriNote v2.0.0 generated config.\n * Created by installer at " . date('Y-m-d H:i:s T') . ".\n * Never commit this file to GitHub.\n */\n\nif (!defined('APP_ROOT')) {\n    define('APP_ROOT', dirname(__DIR__));\n}\n\n\$BASE_CONFIG = [\n" .
-        "    'version' => '2.0.0',\n" .
+    return "<?php\ndeclare(strict_types=1);\n\n/**\n * ShioriNote v2.1.0 generated config.\n * Created by installer at " . date('Y-m-d H:i:s T') . ".\n * Never commit this file to GitHub.\n */\n\nif (!defined('APP_ROOT')) {\n    define('APP_ROOT', dirname(__DIR__));\n}\n\n\$BASE_CONFIG = [\n" .
+        "    'version' => '2.1.0',\n" .
         "    'site_name' => " . inst_php_sq($cfg['site_name']) . ",\n" .
         "    'author' => " . inst_php_sq($cfg['author']) . ",\n" .
         "    'theme_color' => " . inst_php_sq($cfg['theme_color']) . ",\n" .
