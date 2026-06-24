@@ -1,0 +1,33 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * ShioriNote shared functions that are safe to update between releases.
+ * Keep environment-specific values in config/base.inc.phtml only.
+ */
+
+if (!function_exists('role_label_ja')) {
+    function role_label_ja(string $role): string
+    {
+        return match ($role) {
+            'developer' => '開発者',
+            'super_admin' => '総管理',
+            'admin' => '管理者',
+            'user' => 'ユーザー',
+            'banned' => '禁止され',
+            default => '未定義',
+        };
+    }
+}
+
+if (!function_exists('progress_bucket_for_book')) {
+    function progress_bucket_for_book(array $book): string
+    {
+        $bucket = (string)($book['progress_time_bucket'] ?? '');
+        if ($bucket === '') {
+            $bucket = (string)setting('progress_time_bucket', 'daily');
+        }
+        return $bucket === 'hourly' ? 'hourly' : 'daily';
+    }
+}
+?>

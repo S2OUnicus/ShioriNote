@@ -13,7 +13,9 @@ Thumbs.db
 
 # Private runtime configuration
 /config/base.inc.phtml
+/config/base.inc.phtml-*.bak
 /public/.user.ini
+/install.lock
 
 # Local database files and private SQL dumps
 /database/
@@ -28,3 +30,5 @@ Thumbs.db
 /public/upload/book/*
 !/public/upload/book/.gitkeep
 !/public/upload/book/default-cover.svg
+logs/*.log
+logs/*.txt

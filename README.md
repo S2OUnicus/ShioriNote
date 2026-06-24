@@ -2,56 +2,43 @@
 
 # しおりノート（ShioriNote）
 
-**しおりノート（ShioriNote）** は、本ごとの目次に沿って読書の進み具合を記録できる、可愛い雰囲気の読書進展管理サイトです。章・節・小節単位で進展をチェックし、読了率や日別・時間別の進み具合をグラフで確認できます。ユーザーごとに開始時間、完結時間、メモを保存できるので、個人の読書記録にも、少人数の読書会にも使えます。
+**しおりノート（ShioriNote）** は、本ごとの目次に沿って読書の進み具合を記録できる、可愛い雰囲気の読書進展管理サイトです。章・節・小節単位で進展をチェックし、読了率、章ごとの完成度、達成記録、マインドマップ、日別・時間別の進み具合をグラフで確認できます。
 
-GitHub description:
+> GitHub description: 目次単位で本の読書進展を記録し、EChartsで可視化するPHP製の読書管理サイト。
 
-> 目次単位で本の読書進展を記録し、EChartsで可視化するPHP製の読書管理サイト。
+## イメージ
 
-English description:
-
-> ShioriNote is a PHP-based reading progress tracker that records book progress by table of contents, supports notes and completion dates, and visualizes progress with ECharts.
+![しおりノート v2.0.0 イメージ](docs/images/v2.0.0.png)
 
 ## 主な機能
 
 - ログイン必須の読書進展管理サイト
 - 図書リスト、図書紹介ページ、読書進展ページ
 - 章・節・小節から選べる進展管理単位
+- 本ごとに選べる進展時間粒度（日別・時間別）
 - チェックボックスと整数入力による進展記録
-- 読書進展の自動保存（HTMX対応）
-- 目次ごとの自由メモ
-- 全体進展バー、章ごとの進展グラフ、日別・時間別進展グラフ
-- 総進展100%時の「完結」表示と完結時間の自動記録
-- ユーザーごとのTimezone設定
+- HTMXによる自動保存
+- 目次ごとの一行メモ、完成時間、メモ編集モーダル
+- 全体進展バー、章ごと完成度、章ごと残り、進展まとめグラフ
+- 目次を章・節まで俯瞰できるマインドマップ
+- チャート拡大プレビュー、章タブ、達成記録テーブル
 - ユーザーセンター、パスワード変更、個人情報編集
-- 管理システムによる図書管理、目次導入、ユーザー管理、サイト基本設定
-- 新規登録ON/OFF設定（初期値はOFF）
+- 管理システムによる図書管理、目次導入、ユーザー管理、サイト基本設定、ユーザー別進展管理
+- 初回インストーラーによる設定ファイル・データベース・初期管理ユーザー作成
 - `public/` をWebルートにする安全寄りの構成
-
-## 画面の流れ
-
-通常ユーザーは、以下の順番で使います。
-
-```text
-ログイン → 図書リスト → 図書紹介 → 読書進展管理
-```
-
-管理者は管理システムから、図書の追加、目次ファイルの導入、ユーザー権限の変更、サイト基本設定を行います。
 
 ## 必要環境
 
-- PHP 8.5 以上
-- MySQL 9 以上
-- Nginx 1.31.1 以上
-- PHP拡張：PDO MySQL、mbstring、fileinfo
+- PHP 8.1 以上（PHP 8.5 以上推奨）
+- MySQL / MariaDB
+- Nginx または Apache
+- PHP拡張：PDO MySQL、mbstring、fileinfo、openssl
 
 ## インストール
 
 ### 1. ファイルを配置する
 
-サーバー上の任意の場所にファイルを置き、NginxのWebルートを必ず `public/` に向けます。
-
-例：
+サーバー上の任意の場所にファイルを置き、Webルートを必ず `public/` に向けます。
 
 ```text
 /var/www/shiorinote/public
@@ -59,70 +46,76 @@ English description:
 
 `config/`、`page/`、`database-sample/` などを直接Web公開しないでください。
 
-### 2. 設定ファイルを作る
+### 2. 空のデータベースを作成する
 
-`config/base.sample.phtml` をコピーして、実運用用の設定ファイルを作ります。
-
-```bash
-cp config/base.sample.phtml config/base.inc.phtml
-```
-
-その後、`config/base.inc.phtml` の以下を変更してください。
-
-- データベース名
-- データベースユーザー名
-- データベースパスワード
-- 管理システムのURLパス
-- サイト名、author、theme-color
-- 初期Timezone
-
-`config/base.inc.phtml` は `.gitignore` に入っています。GitHubへ公開しないでください。
-
-### 3. データベースを作る
-
-初回インストールでは、サンプルSQLを参考にデータベースを作成します。
+インストーラーはテーブル作成と初期データ導入を自動で行いますが、使用するデータベース自体は先に作成してください。
 
 ```bash
-mysql -u root -p < database-sample/schema.sql
-mysql -u root -p < database-sample/seed.sample.sql
+mysql -u root -p -e "CREATE DATABASE shiorinote CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
 ```
 
-必要ならサンプル図書も導入できます。
+SQLファイル内ではデータベース名を固定していません。`shiorinote` 以外の任意のデータベース名でも使えます。
 
-```bash
-mysql -u root -p < database-sample/sample_book.sql
+### 3. ブラウザで初期設定する
+
+サイトURLへアクセスします。
+
+```text
+https://yourdomain.com/
 ```
 
-`seed.sample.sql` にはローカル確認用のサンプル管理者アカウントが入っています。実運用では、ログイン後すぐにID、メール、パスワード、管理パスを変更してください。
+`install.lock` が存在しない場合、自動で以下へ移動します。
 
-### 4. Nginxを設定する
-
-`deploy/nginx-shiorinote.conf` を参考にしてください。
-
-重要な点は以下です。
-
-```nginx
-root /var/www/shiorinote/public;
-try_files $uri $uri/ /index.php?$query_string;
+```text
+https://yourdomain.com/install/
 ```
 
-`public/` 以外をWebルートにしないでください。
+インストーラーでは、以下を順番に設定します。
 
-## 管理システムについて
+1. セットアップ環境チェック
+2. データベース設定
+3. サイト基本設定
+4. 初期アカウントと管理パス
+5. データベースインストール
+6. 完了画面
 
-管理システムのURLパスは、`config/base.inc.phtml` の `admin_panel_path` で定義します。
+通常の初期アカウント権限は **総管理** です。開発者権限の初期アカウントを作る場合は、初回のみ以下にアクセスします。
 
-サンプル値はランダムな文字列になっています。実運用では、さらに自分用の長いランダム文字列へ変更することをおすすめします。
+```text
+https://yourdomain.com/install/s2odev
+```
 
-管理システムでは以下を設定できます。
+インストールが完了すると、プロジェクトルートに `install.lock` が作成され、再インストールはできなくなります。
 
-- サイト基本管理
-- ユーザー管理
-- 図書管理
-- ユーザー別進展管理
-- その他
+## インストーラーで作られるもの
 
-新規登録機能は初期値OFFです。必要な場合だけ、管理システムでONにしてください。
+- `config/base.inc.phtml`
+- `install.lock`
+- 初期データベーステーブル
+- 初期サイト設定
+- 初期管理ユーザー
+
+既に `config/base.inc.phtml` が存在する場合、インストーラーは次のような名前でバックアップします。
+
+```text
+config/base.inc.phtml-260624161709.bak
+```
+
+これらのファイルは `.gitignore` に入っており、GitHubへ公開しない想定です。
+
+## 手動SQLについて
+
+`database-sample/` には、手動導入や確認用のSQLも入っています。
+
+```text
+database-sample/01_schema.sql
+database-sample/02_seed.sample.sql
+database-sample/03_sample_book.sql
+```
+
+`02_seed.sample.sql` はサイト初期設定のみを登録します。**初期ユーザーは登録しません。** 初期管理ユーザーは `/install/` で作成してください。
+
+テーブルプレフィックスを使う場合は、インストーラーの「テーブルプレフィックス」欄で指定します。初期値は `sn1_` です。
 
 ## 目次ファイルの形式
 
@@ -138,13 +131,29 @@ try_files $uri $uri/ /index.php?$query_string;
     完結まで
 ```
 
-目次ファイルには、章番号・節番号を付けず、タイトルだけを書きます。インデントはスペースまたはタブに対応しています。画面では「第 1 章」「第 1 節」「第 1 小節」のように自動採番して表示します。図書ごとに進展管理単位を「章」「節」「小節」から選べます。
+目次ファイルには、章番号・節番号を付けず、タイトルだけを書きます。画面では「第 1 章」「第 1 節」「第 1 小節」のように自動採番して表示します。
+
+## 管理システムについて
+
+管理システムのURLパスは、インストール時に指定します。初期値はランダム16桁の小文字英数字です。管理パスは重要なので、完了画面で必ず保存してください。
+
+管理システムでは以下を設定できます。
+
+- サイト基本管理
+- ユーザー管理
+- 図書管理
+- ユーザー別進展管理
+- その他
+
+新規登録機能は初期値OFFです。必要な場合だけ管理システムでONにしてください。
 
 ## GitHub公開時の注意
 
 以下は公開しない想定です。
 
 - `config/base.inc.phtml`
+- `config/base.inc.phtml-*.bak`
+- `install.lock`
 - `database/`
 - `public/.user.ini`
 - 実運用中のアップロード画像
@@ -157,6 +166,12 @@ try_files $uri $uri/ /index.php?$query_string;
 - `public/upload/avatar/default-avatar.svg`
 - `public/upload/book/default-cover.svg`
 
+## 既存環境をv2.0.0へ更新する場合
+
+v2.0.0では初回インストーラーを追加しました。既存環境で既に `config/base.inc.phtml` とDBがある場合、通常はインストーラーを使わずファイルを差し替えてください。
+
+v1.3.0からのテーブル構造変更はありませんが、v2.0.0からテーブルプレフィックス対応が追加されています。既存DBが無プレフィックスの場合は、`config/base.inc.phtml` の `db.prefix` を空文字にしてください。
+
 ## ライセンス
 
 このプロジェクトは **Creative Commons Attribution-ShareAlike 4.0 International（CC BY-SA 4.0）** で公開します。
@@ -166,6 +181,6 @@ try_files $uri $uri/ /index.php?$query_string;
 
 ## バージョン
 
-現在のバージョン：`v1.0.2`
+現在のバージョン：`v2.0.0`
 
 変更履歴は `CHANGELOG.md` を確認してください。

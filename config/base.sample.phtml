@@ -2,8 +2,9 @@
 declare(strict_types=1);
 
 /**
- * ShioriNote v1.0.2
- * Sample global config. Copy this file to config/base.inc.phtml before running.
+ * ShioriNote v2.0.0
+ * Sample global config. The /install/ wizard creates config/base.inc.phtml automatically.
+ * If you configure manually, copy this file to config/base.inc.phtml and edit it.
  * Never commit your real config/base.inc.phtml to GitHub.
  */
 
@@ -12,16 +13,19 @@ if (!defined('APP_ROOT')) {
 }
 
 $BASE_CONFIG = [
-    'version' => '1.0.2',
+    'version' => '2.0.0',
     'site_name' => 'しおりノート',
     'author' => 'ShioriNote Project',
     'theme_color' => '#6E1E51',
     'description_default' => '図書ごと・ユーザーごとの読書進展を、目次・メモ・グラフでやさしく管理するサイトです。',
     'default_timezone' => 'Asia/Tokyo',
-    'admin_panel_path' => getenv('SN_ADMIN_PANEL_PATH') ?: (getenv('RPM_ADMIN_PANEL_PATH') ?: '9KG0dYvgI1K4aOGbLbHH5Z'),
+    'admin_panel_path' => getenv('SN_ADMIN_PANEL_PATH') ?: (getenv('RPM_ADMIN_PANEL_PATH') ?: 'change_this_admin_path'),
     'registration_enabled' => false,
     'rewrite_enabled' => true,
     'progress_time_bucket' => 'daily',
+    'site_base_url' => '',
+    'site_subdir' => '',
+    'debug' => false,
     'uploads' => [
         'avatar_dir' => APP_ROOT . '/public/upload/avatar',
         'book_dir' => APP_ROOT . '/public/upload/book',
@@ -32,9 +36,11 @@ $BASE_CONFIG = [
         'host' => getenv('RPM_DB_HOST') ?: '127.0.0.1',
         'port' => (int)(getenv('RPM_DB_PORT') ?: 3306),
         'name' => getenv('SN_DB_NAME') ?: (getenv('RPM_DB_NAME') ?: 'shiorinote'),
-        'user' => getenv('SN_DB_USER') ?: (getenv('RPM_DB_USER') ?: 'shiorinote_user'),
+        'user' => getenv('SN_DB_USER') ?: (getenv('RPM_DB_USER') ?: 'shiorinote'),
         'pass' => getenv('SN_DB_PASS') ?: (getenv('RPM_DB_PASS') ?: 'change_me'),
         'charset' => 'utf8mb4',
+        'prefix' => getenv('SN_DB_PREFIX') ?: (getenv('RPM_DB_PREFIX') ?: ''),
+        'ssl_ca' => getenv('SN_DB_SSL_CA') ?: '',
     ],
 ];
 
@@ -78,6 +84,58 @@ function app_send_security_headers(): void
     header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://cdnjs.cloudflare.com; connect-src 'self'; base-uri 'self'; form-action 'self'");
 }
 
+
+function db_prefix(): string
+{
+    $db = app_config('db', []);
+    $prefix = (string)($db['prefix'] ?? '');
+    return preg_match('/^[A-Za-z0-9_]*$/', $prefix) ? $prefix : '';
+}
+
+function db_table(string $name): string
+{
+    static $allowed = ['site_settings','users','books','book_toc','user_book_progress','user_toc_progress','progress_logs','password_reset_tokens'];
+    if (!in_array($name, $allowed, true)) {
+        throw new InvalidArgumentException('未定義のテーブル名です。');
+    }
+    return db_prefix() . $name;
+}
+
+function db_sql(string $sql): string
+{
+    $prefix = db_prefix();
+    if ($prefix === '') {
+        return $sql;
+    }
+    static $tables = ['password_reset_tokens','user_book_progress','user_toc_progress','site_settings','progress_logs','book_toc','books','users'];
+    foreach ($tables as $table) {
+        $sql = preg_replace('/(?<![A-Za-z0-9_])' . preg_quote($table, '/') . '(?![A-Za-z0-9_])/u', $prefix . $table, $sql) ?? $sql;
+    }
+    return $sql;
+}
+
+class ShioriNotePDO extends PDO
+{
+    public function prepare(string $query, array $options = []): PDOStatement|false
+    {
+        return parent::prepare(db_sql($query), $options);
+    }
+
+    public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
+    {
+        $query = db_sql($query);
+        if ($fetchMode === null) {
+            return parent::query($query);
+        }
+        return parent::query($query, $fetchMode, ...$fetchModeArgs);
+    }
+
+    public function exec(string $statement): int|false
+    {
+        return parent::exec(db_sql($statement));
+    }
+}
+
 function db(): PDO
 {
     static $pdo = null;
@@ -86,17 +144,22 @@ function db(): PDO
     }
     $db = app_config('db');
     $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset']);
-    $pdo = new PDO($dsn, $db['user'], $db['pass'], [
+    $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    ];
+    if (!empty($db['ssl_ca']) && is_file((string)$db['ssl_ca']) && defined('PDO::MYSQL_ATTR_SSL_CA')) {
+        $options[PDO::MYSQL_ATTR_SSL_CA] = (string)$db['ssl_ca'];
+    }
+    $pdo = new ShioriNotePDO($dsn, $db['user'], $db['pass'], $options);
     return $pdo;
 }
 
 function table_exists(string $table): bool
 {
     try {
+        $table = db_table($table);
         $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
         $stmt->execute([$table]);
         return (int)$stmt->fetchColumn() > 0;
@@ -178,10 +241,10 @@ function verify_csrf(): void
 
 function admin_panel_path(): string
 {
-    $path = trim((string)app_config('admin_panel_path', '9KG0dYvgI1K4aOGbLbHH5Z'), '/');
-    $path = preg_replace('/[^A-Za-z0-9_\-\/]/', '', $path) ?: '9KG0dYvgI1K4aOGbLbHH5Z';
+    $path = trim((string)app_config('admin_panel_path', 'change_this_admin_path'), '/');
+    $path = preg_replace('/[^A-Za-z0-9_\-\/]/', '', $path) ?: 'change_this_admin_path';
     $path = trim($path, '/');
-    return $path !== '' ? $path : '9KG0dYvgI1K4aOGbLbHH5Z';
+    return $path !== '' ? $path : 'change_this_admin_path';
 }
 
 function registration_enabled(): bool
@@ -197,6 +260,12 @@ function app_route(): array
         $scriptDir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
         if ($scriptDir !== '' && $scriptDir !== '/' && str_starts_with($path, $scriptDir)) {
             $path = substr($path, strlen($scriptDir));
+        }
+        $basePath = site_base_path();
+        if ($basePath !== '' && str_starts_with($path, $basePath . '/')) {
+            $path = substr($path, strlen($basePath));
+        } elseif ($basePath !== '' && $path === $basePath) {
+            $path = '/';
         }
         $route = trim($path, '/');
     }
@@ -215,31 +284,69 @@ function app_route(): array
     return ['name' => $name, 'id' => isset($parts[1]) ? (int)$parts[1] : (isset($_GET['id']) ? (int)$_GET['id'] : null), 'raw' => $route, 'is_admin_path' => false];
 }
 
+
+function site_base_path(): string
+{
+    $subdir = trim((string)app_config('site_subdir', ''), '/');
+    return $subdir === '' ? '' : '/' . $subdir;
+}
+
+function asset_url(string $path): string
+{
+    $path = trim($path);
+    if ($path === '') {
+        return site_base_path() . '/';
+    }
+    if (preg_match('#^(?:https?:)?//#i', $path) || str_starts_with($path, 'data:')) {
+        return $path;
+    }
+    return site_base_path() . '/' . ltrim($path, '/');
+}
+
+function app_debug(): bool
+{
+    return (bool)app_config('debug', false);
+}
+
+function app_log_error(Throwable $e): void
+{
+    $dir = APP_ROOT . '/logs';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return;
+    }
+    $line = '[' . gmdate('c') . '] ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+    @file_put_contents($dir . '/app-error.log', $line, FILE_APPEND | LOCK_EX);
+}
+
 function url_for(string $route = 'index', array $params = []): string
 {
     $rewrite = setting('rewrite_enabled', true);
+    $base = site_base_path();
     $route = trim($route, '/');
     $id = $params['id'] ?? null;
     unset($params['id']);
     if ($route === 'admin') {
-        $path = '/' . admin_panel_path();
+        $path = $base . '/' . admin_panel_path();
         if ($params) {
             $path .= '?' . http_build_query($params);
         }
         return $path;
     }
     if ($rewrite) {
-        $path = '/' . ($route === 'index' ? '' : $route);
+        $path = $base . '/' . ($route === 'index' ? '' : $route);
         if ($id !== null) {
-            $path .= '/' . rawurlencode((string)$id);
+            $path = rtrim($path, '/') . '/' . rawurlencode((string)$id);
         }
         if ($params) {
             $path .= '?' . http_build_query($params);
         }
-        return $path;
+        return $path === '' ? '/' : $path;
     }
     $query = ['r' => $route === '' ? 'index' : $route] + ($id !== null ? ['id' => $id] : []) + $params;
-    return '/index.php?' . http_build_query($query);
+    return $base . '/index.php?' . http_build_query($query);
 }
 
 function redirect_to(string $route, array $params = []): never
@@ -287,6 +394,18 @@ function role_rank(string $role): int
     };
 }
 
+function role_label_ja(string $role): string
+{
+    return match ($role) {
+        'developer' => '開発者',
+        'super_admin' => '総管理',
+        'admin' => '管理者',
+        'user' => 'ユーザー',
+        'banned' => '禁止され',
+        default => '未定義',
+    };
+}
+
 function require_login(): array
 {
     $user = current_user();
@@ -327,6 +446,18 @@ function can_site_settings(?array $user = null): bool
 {
     $user ??= current_user();
     return $user && in_array($user['role'], ['developer', 'super_admin'], true);
+}
+
+function users_count(): int
+{
+    try {
+        if (!table_exists('users')) {
+            return 0;
+        }
+        return (int)db()->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    } catch (Throwable) {
+        return 0;
+    }
 }
 
 function create_password_bundle(string $password, ?string $salt = null): array
@@ -435,6 +566,7 @@ function safe_image_upload(array $file, string $dir, string $prefix): ?string
     if (!move_uploaded_file($file['tmp_name'], $dest)) {
         throw new RuntimeException('画像を保存できませんでした。');
     }
+    @chmod($dest, 0644);
     return str_replace(APP_ROOT . '/public', '', $dest);
 }
 
@@ -521,6 +653,15 @@ function target_toc_level(string $unit): int
         'subsection' => 3,
         default => 2,
     };
+}
+
+function progress_bucket_for_book(array $book): string
+{
+    $bucket = (string)($book['progress_time_bucket'] ?? '');
+    if ($bucket === '') {
+        $bucket = (string)setting('progress_time_bucket', 'daily');
+    }
+    return $bucket === 'hourly' ? 'hourly' : 'daily';
 }
 
 function target_toc_items(array $toc, string $unit): array

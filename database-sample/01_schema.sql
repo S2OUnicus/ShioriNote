@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS shiorinote CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-USE shiorinote;
-
 CREATE TABLE IF NOT EXISTS site_settings (
     setting_key VARCHAR(80) NOT NULL PRIMARY KEY,
     setting_value TEXT NOT NULL,
@@ -36,6 +33,7 @@ CREATE TABLE IF NOT EXISTS books (
     cover_path VARCHAR(255) NOT NULL DEFAULT '',
     memo TEXT NULL,
     progress_unit ENUM('chapter','section','subsection') NOT NULL DEFAULT 'section',
+    progress_time_bucket ENUM('daily','hourly') NOT NULL DEFAULT 'daily',
     created_by INT UNSIGNED NULL,
     created_at_utc DATETIME(6) NOT NULL DEFAULT (UTC_TIMESTAMP(6)),
     updated_at_utc DATETIME(6) NOT NULL DEFAULT (UTC_TIMESTAMP(6)),
@@ -77,6 +75,7 @@ CREATE TABLE IF NOT EXISTS user_toc_progress (
     percent TINYINT UNSIGNED NOT NULL DEFAULT 0,
     is_checked TINYINT(1) NOT NULL DEFAULT 0,
     memo TEXT NULL,
+    completed_at_utc DATETIME(6) NULL,
     updated_at_utc DATETIME(6) NOT NULL DEFAULT (UTC_TIMESTAMP(6)),
     PRIMARY KEY (uid, toc_id),
     INDEX idx_utp_book (uid, book_id),
@@ -111,14 +110,3 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     INDEX idx_reset_expire (expires_at_utc),
     CONSTRAINT fk_reset_user FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-INSERT INTO site_settings(setting_key, setting_value) VALUES
-('site_name','しおりノート'),
-('author','ShioriNote Project'),
-('theme_color','#6E1E51'),
-('description_default','図書ごと・ユーザーごとの読書進展を、目次・メモ・グラフでやさしく管理するサイトです。'),
-('default_timezone','Asia/Tokyo'),
-('rewrite_enabled','true'),
-('registration_enabled','false'),
-('progress_time_bucket','daily')
-ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at_utc = UTC_TIMESTAMP(6);
