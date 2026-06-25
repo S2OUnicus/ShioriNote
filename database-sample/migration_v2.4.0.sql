@@ -1,0 +1,3 @@
+-- ShioriNote v2.4.0 migration
+-- No database schema changes in v2.4.0.
+-- The CLI upgrade tool creates/updates update.lock after backup and migration checks.

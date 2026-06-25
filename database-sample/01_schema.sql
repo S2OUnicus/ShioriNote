@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS books (
     memo TEXT NULL,
     progress_unit ENUM('chapter','section','subsection') NOT NULL DEFAULT 'section',
     progress_time_bucket ENUM('daily','hourly') NOT NULL DEFAULT 'daily',
+    mindmap_depth ENUM('chapter','section','subsection') NOT NULL DEFAULT 'section',
+    chapter_chart_style ENUM('rounded','horizontal') NOT NULL DEFAULT 'rounded',
     created_by INT UNSIGNED NULL,
     created_at_utc DATETIME(6) NOT NULL DEFAULT (UTC_TIMESTAMP(6)),
     updated_at_utc DATETIME(6) NOT NULL DEFAULT (UTC_TIMESTAMP(6)),

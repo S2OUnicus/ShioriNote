@@ -32,3 +32,7 @@ Thumbs.db
 !/public/upload/book/default-cover.svg
 logs/*.log
 logs/*.txt
+/update.lock
+/backup/database/*.sql
+/backup/database/*.sql.gz
+!/backup/database/.gitkeep

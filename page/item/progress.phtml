@@ -129,6 +129,7 @@ if (!function_exists('sn_toc_children_by_parent')) {
             'bucketDelta' => $bucketDelta,
             'bucketTotal' => $bucketTotal,
             'bucketType' => $bucketType,
+            'chapterChartStyle' => in_array((string)($book['chapter_chart_style'] ?? 'rounded'), ['rounded','horizontal'], true) ? (string)$book['chapter_chart_style'] : 'rounded',
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
         return ['overall' => $overall, 'bucketType' => $bucketType, 'chartData' => $chartData, 'summaryRows' => $summaryRows];
     }
@@ -144,10 +145,17 @@ if (!function_exists('sn_toc_children_by_parent')) {
         ?><div class="uk-card uk-card-default uk-card-body rpm-card"><h2 class="rpm-chart-title"><a href="#<?php echo e($modalId); ?>" uk-toggle><?php echo e($title); ?></a></h2><div id="<?php echo e($chartId); ?>" class="rpm-chart"></div></div><div id="<?php echo e($modalId); ?>" class="uk-modal-container rpm-chart-modal" uk-modal><div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical"><button class="uk-modal-close-default" type="button" uk-close></button><h2><?php echo e($title); ?></h2><div id="<?php echo e($modalChartId); ?>" class="rpm-chart rpm-chart-large"></div></div></div><?php
     }
 
-    function sn_render_chart_zone(string $chartData, string $bucketType, bool $oob = false): void
+    function sn_chapter_chart_card(string $style): void
+    {
+        $label = $style === 'horizontal' ? 'Horizontal' : 'Rounded';
+        ?><div class="uk-card uk-card-default uk-card-body rpm-card rpm-chapter-chart-card" data-current-style="<?php echo e($style); ?>"><div class="rpm-chart-title-row"><h2 class="rpm-chart-title"><a href="#modal-chart-chapter" uk-toggle>章ごと完成度</a></h2><button class="uk-button uk-button-default rpm-round-toggle rpm-chart-toggle" type="button" data-chart-area="main" title="Rounded / Horizontal 切り替え"><?php echo e($label); ?></button></div><div id="chart-polar" class="rpm-chart" data-chart-role="chapter-main"></div></div><div id="modal-chart-chapter" class="uk-modal-container rpm-chart-modal rpm-chapter-chart-modal" uk-modal><div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical"><button class="uk-modal-close-default" type="button" uk-close></button><div class="rpm-chart-title-row"><h2>章ごと完成度</h2><button class="uk-button uk-button-default rpm-round-toggle rpm-chart-toggle rpm-modal-mobile-toggle" type="button" data-chart-area="modal" title="Rounded / Horizontal 切り替え"><?php echo e($label); ?></button></div><div class="rpm-chapter-modal-pc"><section><h3>Rounded Bar</h3><div id="chart-chapter-rounded-modal" class="rpm-chart rpm-chart-large"></div></section><section><h3>Horizontal Bar</h3><div id="chart-chapter-horizontal-modal" class="rpm-chart rpm-chart-large"></div></section></div><div class="rpm-chapter-modal-mobile"><div id="chart-chapter-mobile-modal" class="rpm-chart rpm-chart-large"></div></div></div></div><?php
+    }
+
+    function sn_render_chart_zone(string $chartData, array $book, bool $oob = false): void
     {
         $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
-        ?><section id="rpm-chart-zone" class="rpm-chart-grid uk-margin-large"<?php echo $oobAttr; ?>><template id="progress-chart-data"><?php echo $chartData; ?></template><?php sn_chart_card('章ごと完成度', 'chart-polar', 'modal-chart-polar', 'chart-polar-modal'); ?><?php sn_chart_card('章ごと残り', 'chart-stacked', 'modal-chart-stacked', 'chart-stacked-modal'); ?><?php sn_chart_card('進展まとめ', 'chart-mixed', 'modal-chart-mixed', 'chart-mixed-modal'); ?></section><?php
+        $style = in_array((string)($book['chapter_chart_style'] ?? 'rounded'), ['rounded','horizontal'], true) ? (string)$book['chapter_chart_style'] : 'rounded';
+        ?><section id="rpm-chart-zone" class="rpm-chart-grid uk-margin-large" data-chapter-style="<?php echo e($style); ?>"<?php echo $oobAttr; ?>><template id="progress-chart-data"><?php echo $chartData; ?></template><?php sn_chapter_chart_card($style); ?><?php sn_chart_card('章ごと残り', 'chart-stacked', 'modal-chart-stacked', 'chart-stacked-modal'); ?><?php sn_chart_card('進展まとめ', 'chart-mixed', 'modal-chart-mixed', 'chart-mixed-modal'); ?></section><?php
     }
 
     function sn_render_completed_input(array $user, array $bookProgress, bool $oob = false): void
@@ -157,23 +165,40 @@ if (!function_exists('sn_toc_children_by_parent')) {
     }
 
 
+    function sn_mindmap_depth_level(array $book): int
+    {
+        return match ((string)($book['mindmap_depth'] ?? 'section')) {
+            'chapter' => 1,
+            'subsection' => 3,
+            default => 2,
+        };
+    }
+
+    function sn_mindmap_node(array $node, array $childrenByParent, int $maxLevel): array
+    {
+        $data = ['name' => $node['display_title'] ?? $node['title']];
+        if ((int)$node['level'] < $maxLevel) {
+            $children = [];
+            foreach ($childrenByParent[(int)$node['toc_id']] ?? [] as $child) {
+                if ((int)$child['level'] <= $maxLevel) {
+                    $children[] = sn_mindmap_node($child, $childrenByParent, $maxLevel);
+                }
+            }
+            if ($children) {
+                $data['children'] = $children;
+            }
+        }
+        return $data;
+    }
+
     function sn_mindmap_tree_data(array $book, array $toc): array
     {
         $childrenByParent = sn_toc_children_by_parent($toc);
         $chapters = array_values(array_filter($toc, fn($x) => (int)$x['level'] === 1));
+        $maxLevel = sn_mindmap_depth_level($book);
         $chapterNodes = [];
         foreach ($chapters as $chapter) {
-            $sections = [];
-            foreach ($childrenByParent[(int)$chapter['toc_id']] ?? [] as $section) {
-                if ((int)$section['level'] === 2) {
-                    $sections[] = ['name' => $section['display_title'] ?? $section['title']];
-                }
-            }
-            $node = ['name' => $chapter['display_title'] ?? $chapter['title']];
-            if ($sections) {
-                $node['children'] = $sections;
-            }
-            $chapterNodes[] = $node;
+            $chapterNodes[] = sn_mindmap_node($chapter, $childrenByParent, $maxLevel);
         }
         return ['name' => $book['title'], 'children' => $chapterNodes];
     }
@@ -307,7 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ctx = sn_progress_context($user, $book, $toc, $targetItems, $progressByToc);
         if (strtolower($_SERVER['HTTP_HX_REQUEST'] ?? '') === 'true') {
             header('HX-Trigger: shiorinoteProgressSaved');
-            ?><div class="uk-alert-success rpm-autosave-alert" uk-alert><p>保存しました。</p></div><?php sn_render_progress_summary($user, $book, $bookProgress, (float)$ctx['overall'], (string)$ctx['bucketType'], true); sn_render_chart_zone((string)$ctx['chartData'], (string)$ctx['bucketType'], true); sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], (string)$ctx['bucketType'], true); exit;
+            ?><div class="uk-alert-success rpm-autosave-alert" uk-alert><p>保存しました。</p></div><?php sn_render_progress_summary($user, $book, $bookProgress, (float)$ctx['overall'], (string)$ctx['bucketType'], true); sn_render_chart_zone((string)$ctx['chartData'], $book, true); sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], (string)$ctx['bucketType'], true); exit;
         }
         app_flash('success', '読書進展を保存しました。');
         if ($isAdminProgress) {
@@ -332,4 +357,4 @@ $bucketType = (string)$ctx['bucketType'];
 $chartData = (string)$ctx['chartData'];
 ?>
 <?php if ($isAdminProgress): ?><section class="uk-alert-warning rpm-admin-progress-warning" uk-alert><p>今は「<?php echo e(role_label_ja((string)($progressAdmin['role'] ?? 'admin'))); ?>」として、<?php echo e($user['login_id']); ?> さんの「<?php echo e($book['title']); ?>」を管理します。</p><p><a href="<?php echo e($progressBackUrl); ?>">ユーザー別進展管理へ戻る</a></p></section><?php endif; ?>
-<div class="rpm-progress-layout"><aside class="rpm-progress-side"><?php sn_render_progress_summary($user, $book, $bookProgress, $overall, $bucketType); ?><?php sn_render_chart_zone($chartData, $bucketType); ?><section class="uk-card uk-card-default uk-card-body rpm-card uk-margin-large"><h2>図書の基本情報カード</h2><div class="rpm-book-info-card"><img class="rpm-book-cover-sm" src="<?php echo e(asset_url($book['cover_path'] ?: '/upload/book/default-cover.svg')); ?>" alt="<?php echo e($book['title']); ?>"><div><h3><?php echo e($book['title']); ?></h3><p class="uk-text-meta"><?php echo e($book['author'] ?: '作者未設定'); ?> / <?php echo e($book['publisher'] ?: '発行機関未設定'); ?></p><p><?php echo nl2br(e($book['memo'] ?: 'メモはまだありません。')); ?></p></div></div></section></aside><section class="rpm-progress-main"><?php sn_render_mindmap_summary($book, $toc); ?><form id="rpm-progress-form" class="rpm-progress-form uk-card uk-card-default uk-card-body rpm-card" method="post" action="<?php echo e($progressAction); ?>" hx-post="<?php echo e($progressAction); ?>" hx-target="#rpm-autosave-status" hx-swap="innerHTML"><?php echo csrf_field(); ?><input type="hidden" name="action" value="progress_save"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap rpm-form-head"><h2>目次進展</h2><div id="rpm-autosave-status" class="rpm-autosave-status" aria-live="polite"></div></div><?php sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], $bucketType); ?></form></section></div>
+<div class="rpm-progress-layout"><aside class="rpm-progress-side"><?php sn_render_progress_summary($user, $book, $bookProgress, $overall, $bucketType); ?><?php sn_render_chart_zone($chartData, $book); ?><section class="uk-card uk-card-default uk-card-body rpm-card uk-margin-large"><h2>図書の基本情報カード</h2><div class="rpm-book-info-card"><img class="rpm-book-cover-sm" src="<?php echo e(asset_url($book['cover_path'] ?: '/upload/book/default-cover.svg')); ?>" alt="<?php echo e($book['title']); ?>"><div><h3><?php echo e($book['title']); ?></h3><p class="uk-text-meta"><?php echo e($book['author'] ?: '作者未設定'); ?> / <?php echo e($book['publisher'] ?: '発行機関未設定'); ?></p><p><?php echo nl2br(e($book['memo'] ?: 'メモはまだありません。')); ?></p></div></div></section></aside><section class="rpm-progress-main"><?php sn_render_mindmap_summary($book, $toc); ?><form id="rpm-progress-form" class="rpm-progress-form uk-card uk-card-default uk-card-body rpm-card" method="post" action="<?php echo e($progressAction); ?>" hx-post="<?php echo e($progressAction); ?>" hx-target="#rpm-autosave-status" hx-swap="innerHTML"><?php echo csrf_field(); ?><input type="hidden" name="action" value="progress_save"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap rpm-form-head"><h2>目次進展</h2><div id="rpm-autosave-status" class="rpm-autosave-status" aria-live="polite"></div></div><?php sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], $bucketType); ?></form></section></div>

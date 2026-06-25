@@ -5,6 +5,10 @@
   function qsa(s,r=document){return Array.from(r.querySelectorAll(s))}
   function nowLocalValue(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
   function oneLine(v){return String(v||"").replace(/[\r\n]+/g," ").replace(/\s+/g," ").trim().slice(0,1000)}
+  function isPortrait(){return window.matchMedia&&window.matchMedia("(orientation: portrait)").matches}
+  function normalizeStyle(v){return v==="horizontal"?"horizontal":"rounded"}
+  function currentChapterStyle(){const z=qs("#rpm-chart-zone");return normalizeStyle(z?.dataset?.currentStyle||z?.dataset?.chapterStyle||readChartData()?.chapterChartStyle||"rounded")}
+  function setCurrentChapterStyle(style){style=normalizeStyle(style);const z=qs("#rpm-chart-zone");if(z)z.dataset.currentStyle=style;qsa(".rpm-chart-toggle").forEach(b=>{b.textContent=style==="horizontal"?"Horizontal":"Rounded"});return style}
   function normalizeProgressTarget(t){
     const row=t.closest?.(".rpm-toc-row");
     const input=row?.querySelector(".rpm-percent-input");
@@ -56,18 +60,34 @@
   function readChartData(){return readJsonElement("progress-chart-data")}
   function readMindmapData(){return readJsonElement("rpm-mindmap-data")}
   function baseChartFont(){return {fontFamily:'"Klee One","Hiragino Sans","Yu Gothic",sans-serif'}}
+  function roundedOption(data){return {color:chartPalette,textStyle:baseChartFont(),tooltip:{trigger:"item",formatter:"{b}: {c}%"},angleAxis:{max:100,startAngle:75},radiusAxis:{type:"category",data:data.chapterLabels||[]},polar:{},series:[{type:"bar",data:data.chapterPercents||[],coordinateSystem:"polar",roundCap:true,label:{show:true,position:"middle",formatter:"{b}: {c}%"},itemStyle:{color:p=>chartPalette[p.dataIndex%chartPalette.length]}}]}}
+  function horizontalOption(data){return {color:chartPalette,textStyle:baseChartFont(),grid:{left:54,right:28,top:28,bottom:40,containLabel:true},tooltip:{trigger:"axis",axisPointer:{type:"shadow"},formatter:items=>{const p=items&&items[0];return p?`${p.name}: ${p.value}%`:""}},xAxis:{type:"value",min:0,max:100,axisLabel:{formatter:"{value}%"}},yAxis:{type:"category",inverse:true,data:data.chapterLabels||[]},series:[{name:"完成度",type:"bar",data:data.chapterPercents||[],barWidth:18,itemStyle:{borderRadius:[0,12,12,0],color:p=>chartPalette[p.dataIndex%chartPalette.length]},label:{show:true,position:"right",formatter:"{c}%"}}]}}
   function optionFor(kind,data){
-    if(kind==="polar")return {color:chartPalette,textStyle:baseChartFont(),tooltip:{trigger:"item",formatter:"{b}: {c}%"},angleAxis:{max:100,startAngle:75},radiusAxis:{type:"category",data:data.chapterLabels||[]},polar:{},series:[{type:"bar",data:data.chapterPercents||[],coordinateSystem:"polar",label:{show:true,position:"middle",formatter:"{b}: {c}%"},itemStyle:{color:p=>chartPalette[p.dataIndex%chartPalette.length]}}]};
+    if(kind==="rounded"||kind==="polar")return roundedOption(data);
+    if(kind==="horizontal")return horizontalOption(data);
     if(kind==="stacked"){const done=data.chapterPercents||[];const remain=data.chapterRemaining||done.map(v=>Math.max(0,100-v));return {color:[chartPalette[0],chartPalette[3],chartPalette[6]],textStyle:baseChartFont(),tooltip:{trigger:"axis"},legend:{data:["完成度","残り"]},xAxis:{type:"category",boundaryGap:false,data:data.chapterLabels||[]},yAxis:{type:"value",max:100,axisLabel:{formatter:"{value}%"}},series:[{name:"完成度",type:"line",areaStyle:{opacity:.22},smooth:true,data:done},{name:"残り",type:"line",areaStyle:{opacity:.22},smooth:true,data:remain}]}}
     return {color:[chartPalette[4],chartPalette[2],chartPalette[8]],textStyle:baseChartFont(),tooltip:{trigger:"axis"},legend:{data:["達成数","総進展"]},xAxis:[{type:"category",data:data.bucketLabels||[]}],yAxis:[{type:"value",name:"達成数",minInterval:1},{type:"value",name:"総進展",min:0,max:100,axisLabel:{formatter:"{value}%"}}],series:[{name:"達成数",type:"bar",data:data.bucketDelta||[]},{name:"総進展",type:"line",yAxisIndex:1,smooth:true,data:data.bucketTotal||[]}]};
   }
   function initOneChart(el,kind,data){if(!el||typeof echarts==="undefined")return;const old=echarts.getInstanceByDom(el);if(old)old.dispose();const chart=echarts.init(el);chart.setOption(optionFor(kind,data));setTimeout(()=>chart.resize(),80)}
-  function initCharts(){if(typeof echarts==="undefined")return;const data=readChartData();if(!data)return;initOneChart(qs("#chart-polar"),"polar",data);initOneChart(qs("#chart-stacked"),"stacked",data);initOneChart(qs("#chart-mixed"),"mixed",data)}
-  function initModalChart(modal){if(typeof echarts==="undefined")return;const data=readChartData();if(!data||!modal)return;const pairs=[["chart-polar-modal","polar"],["chart-stacked-modal","stacked"],["chart-mixed-modal","mixed"]];pairs.forEach(([id,kind])=>{const el=modal.querySelector("#"+id);if(el){initOneChart(el,kind,data);setTimeout(()=>{const c=echarts.getInstanceByDom(el);if(c)c.resize()},160);setTimeout(()=>{const c=echarts.getInstanceByDom(el);if(c)c.resize()},420)}})}
+  function initCharts(){if(typeof echarts==="undefined")return;const data=readChartData();if(!data)return;const style=setCurrentChapterStyle(currentChapterStyle());initOneChart(qs("#chart-polar"),style,data);initOneChart(qs("#chart-stacked"),"stacked",data);initOneChart(qs("#chart-mixed"),"mixed",data)}
+  function initModalChart(modal){
+    if(typeof echarts==="undefined")return;const data=readChartData();if(!data||!modal)return;
+    if(modal.id==="modal-chart-chapter"){
+      initOneChart(modal.querySelector("#chart-chapter-rounded-modal"),"rounded",data);
+      initOneChart(modal.querySelector("#chart-chapter-horizontal-modal"),"horizontal",data);
+      initOneChart(modal.querySelector("#chart-chapter-mobile-modal"),currentChapterStyle(),data);
+    }else{
+      const pairs=[["chart-stacked-modal","stacked"],["chart-mixed-modal","mixed"]];
+      pairs.forEach(([id,kind])=>{const el=modal.querySelector("#"+id);if(el){initOneChart(el,kind,data)}})
+    }
+    setTimeout(resizeCharts,160);setTimeout(resizeCharts,420)
+  }
+  function toggleChapterChart(area){const style=setCurrentChapterStyle(currentChapterStyle()==="horizontal"?"rounded":"horizontal");const data=readChartData();if(!data)return;initOneChart(qs("#chart-polar"),style,data);if(area==="modal")initOneChart(qs("#chart-chapter-mobile-modal"),style,data);resizeCharts()}
   function initMindmap(){if(typeof echarts==="undefined")return;const el=qs("#chart-mindmap");const data=readMindmapData();if(!el||!data)return;if(el.offsetWidth===0&&el.offsetHeight===0)return;const old=echarts.getInstanceByDom(el);if(old)old.dispose();const chart=echarts.init(el);chart.setOption({color:chartPalette,textStyle:baseChartFont(),tooltip:{trigger:"item",triggerOn:"mousemove"},series:[{type:"tree",name:"目次マインドマップ",data:[data],top:"5%",left:"7%",bottom:"5%",right:"20%",orient:"LR",symbolSize:8,initialTreeDepth:2,expandAndCollapse:true,animationDuration:550,animationDurationUpdate:750,label:{position:"left",verticalAlign:"middle",align:"right",fontSize:13,color:"#4b1236",lineHeight:18},leaves:{label:{position:"right",verticalAlign:"middle",align:"left",fontSize:13,color:"#4b1236",lineHeight:18}},emphasis:{focus:"descendant"},lineStyle:{color:"rgba(110,30,81,0.32)",width:2,curveness:.35}}]});setTimeout(()=>chart.resize(),80);setTimeout(()=>chart.resize(),260)}
-  function syncMindmapDetails(){qsa(".rpm-mindmap-summary").forEach(el=>{if(!el.dataset.responsiveInit){if(window.matchMedia&&window.matchMedia("(orientation: portrait)").matches)el.removeAttribute("open");else el.setAttribute("open","open");el.dataset.responsiveInit="1"}if(!el.dataset.bound){el.dataset.bound="1";el.addEventListener("toggle",()=>{if(el.open)setTimeout(()=>{initMindmap();resizeCharts()},80)})}})}
+  function syncMindmapDetails(){qsa(".rpm-mindmap-summary").forEach(el=>{if(!el.dataset.responsiveInit){if(isPortrait())el.removeAttribute("open");else el.setAttribute("open","open");el.dataset.responsiveInit="1"}if(!el.dataset.bound){el.dataset.bound="1";el.addEventListener("toggle",()=>{if(el.open)setTimeout(()=>{initMindmap();resizeCharts()},80)})}})}
   function resizeCharts(){if(typeof echarts==="undefined")return;qsa(".rpm-chart,.rpm-mindmap-chart").forEach(el=>{const c=echarts.getInstanceByDom(el);if(c)c.resize()})}
   document.addEventListener("DOMContentLoaded",()=>{bindProgressForm();syncMindmapDetails();initCharts();initMindmap();window.addEventListener("resize",resizeCharts,{passive:true})});
+  document.body.addEventListener("click",ev=>{const btn=ev.target?.closest?.(".rpm-chart-toggle");if(btn){ev.preventDefault();ev.stopPropagation();toggleChapterChart(btn.dataset.chartArea||"main")}});
   document.body.addEventListener("beforeshow",ev=>{if(ev.target?.classList?.contains("rpm-memo-modal")){const input=ev.target.querySelector(".rpm-memo-modal-input");setTimeout(()=>input?.focus(),60)}});
   document.body.addEventListener("hide",ev=>{if(ev.target?.classList?.contains("rpm-memo-modal")){saveMemoInput(ev.target.querySelector(".rpm-memo-modal-input"))}});
   document.addEventListener("keydown",ev=>{const t=ev.target;if(t instanceof HTMLElement&&t.matches(".rpm-memo-modal-input")&&ev.key==="Enter"){ev.preventDefault();saveMemoInput(t);if(window.UIkit){const modal=t.closest(".rpm-memo-modal");if(modal)UIkit.modal(modal).hide()}}});

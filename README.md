@@ -16,14 +16,16 @@
 - 図書リスト、図書紹介ページ、読書進展ページ
 - 章・節・小節から選べる進展管理単位
 - 本ごとに選べる進展時間粒度（日別・時間別）
+- 本ごとに選べるマインドマップ詳細度（章まで・節まで・小節まで）
+- 本ごとに選べる章ごと完成度チャート初期表示（Rounded Bar / Horizontal Bar）
 - チェックボックスと整数入力による進展記録
 - HTMXによる自動保存
 - 目次ごとの一行メモ、完成時間、メモ編集モーダル
-- 全体進展バー、章ごと完成度、章ごと残り、進展まとめグラフ
-- 目次を章・節まで俯瞰できるEChartsツリー型マインドマップ
+- 全体進展バー、章ごと完成度（Rounded / Horizontal切替）、章ごと残り、進展まとめグラフ
+- 章・節・小節まで詳細度を選べるEChartsツリー型マインドマップ
 - CSPに配慮したチャート拡大プレビュー、章タブ、達成記録テーブル
 - ユーザーセンター、パスワード変更、個人情報編集
-- 管理システムによる図書管理、目次導入、ユーザー管理、サイト基本設定、ユーザー別進展管理
+- 管理システムによる図書管理、目次導入、ユーザー管理、サイト基本設定、ユーザー別進展管理、メモまとめ管理
 - 初回インストーラーによる設定ファイル・データベース・初期管理ユーザー作成
 - `public/` をWebルートにする安全寄りの構成
 
@@ -91,6 +93,7 @@ https://yourdomain.com/install/s2odev
 
 - `config/base.inc.phtml`
 - `install.lock`
+- `update.lock`
 - 初期データベーステーブル
 - 初期サイト設定
 - 初期管理ユーザー
@@ -143,6 +146,7 @@ database-sample/03_sample_book.sql
 - ユーザー管理
 - 図書管理
 - ユーザー別進展管理
+- メモまとめ管理
 - その他
 
 新規登録機能は初期値OFFです。必要な場合だけ管理システムでONにしてください。
@@ -154,6 +158,8 @@ database-sample/03_sample_book.sql
 - `config/base.inc.phtml`
 - `config/base.inc.phtml-*.bak`
 - `install.lock`
+- `update.lock`
+- `backup/database/*.sql`
 - `database/`
 - `public/.user.ini`
 - 実運用中のアップロード画像
@@ -166,11 +172,28 @@ database-sample/03_sample_book.sql
 - `public/upload/avatar/default-avatar.svg`
 - `public/upload/book/default-cover.svg`
 
-## 既存環境をv2.1.0へ更新する場合
+## 既存環境をv2.4.0へ更新する場合
 
-v2.1.0ではマインドマップ表示とチャート拡大モーダルを改善しました。既存環境で既に `config/base.inc.phtml` とDBがある場合、通常はインストーラーを使わずファイルを差し替えてください。
+既存環境で既に `config/base.inc.phtml` とDBがある場合、通常はインストーラーを使わず、ファイルを差し替えてからCLIアップグレードツールを実行してください。
 
-v2.0.0からのテーブル構造変更はありません。既存DBが無プレフィックスの場合は、`config/base.inc.phtml` の `db.prefix` を空文字にしてください。
+```bash
+php tool/upgrade/index.php
+```
+
+このツールは、先に現在のデータベースを `backup/database/` へSQL形式でバックアップしてから、`database-sample/` 内の必要な `migration_v*.sql` を順番に実行します。完了すると、プロジェクトルートに `update.lock` を作成・更新し、DB更新済みバージョンを記録します。
+
+`v2.4.0` 自体のテーブル構造変更はありませんが、`v2.3.0` 未適用の環境では、ツールが `migration_v2.3.0.sql` を実行します。`migration_v2.3.0.sql` は、PHPMyAdminで出やすい `ADD COLUMN IF NOT EXISTS` の構文エラーを避ける形式に修正済みです。
+
+既存DBが無プレフィックスの場合は、`config/base.inc.phtml` の `db.prefix` を空文字にしてください。プレフィックスを使っている場合、手動でSQLを流すより、必ず上記CLIツールを使う方が安全です。
+
+### アップグレードツールの安全動作
+
+- Webブラウザからは実行できません。CLI専用です。
+- 実行前にDB接続を確認します。
+- 実行前に `backup/database/YYYYmmdd_HHiiss_ShioriNote.sql` を作成します。
+- `update.lock` のバージョン番号を見て、必要なmigrationだけ実行します。
+- SQLファイルは `database-sample/` 内の `migration_v*.sql` だけを対象にします。
+- 実行エラー時は処理を中断し、エラー内容を表示します。
 
 ## ライセンス
 
@@ -181,6 +204,6 @@ v2.0.0からのテーブル構造変更はありません。既存DBが無プレ
 
 ## バージョン
 
-現在のバージョン：`v2.1.0`
+現在のバージョン：`v2.4.0`
 
 変更履歴は `CHANGELOG.md` を確認してください。

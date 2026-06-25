@@ -1,5 +1,68 @@
 # CHANGELOG
 
+## v2.4.0
+
+### Added
+
+- CLI専用のDBアップグレードツール `tool/upgrade/index.php` を追加しました。
+- アップグレード前に `backup/database/` へSQLバックアップを作成する処理を追加しました。
+- DB更新済みバージョンを記録する `update.lock` を追加しました。
+- `backup/database/.gitkeep` を追加しました。
+- `database-sample/migration_v2.4.0.sql` を追加しました。v2.4.0ではDB構造変更がないため、内容はno-opです。
+
+### Changed
+
+- `database-sample/migration_v2.3.0.sql` をMySQLで互換性が低い `ADD COLUMN IF NOT EXISTS` に依存しない形式へ修正しました。
+- READMEの既存環境更新手順を、初心者でも実行しやすい `php tool/upgrade/index.php` 方式へ変更しました。
+- インストーラー完了時に `update.lock` も作成するようにしました。
+- `config/base.sample.phtml` とインストーラー生成設定のバージョンをv2.4.0へ更新しました。
+
+### Security
+
+- アップグレードツールはCLI専用にし、Webブラウザからの直接実行を拒否します。
+- migration実行前にDB接続とバックアップ作成を行います。
+- `update.lock`、DBバックアップSQL、設定バックアップを `.gitignore` 対象にしました。
+- migration対象は `database-sample/migration_v*.sql` のみに限定しました。
+- 例外発生時は処理を中断し、作成済みバックアップの確認を促すようにしました。
+
+### SQL
+
+- SQL部分変更あり。
+- テーブル構造の新規変更はありません。
+- `migration_v2.3.0.sql` を修正しました。
+- `migration_v2.4.0.sql` を追加しましたが、v2.4.0自体はno-opです。
+
+## v2.3.0
+
+### Added
+
+- 図書管理に、図書ごとのマインドマップ詳細度設定を追加しました。章まで、節まで、小節までを選択できます。
+- 図書管理に、章ごと完成度チャートの初期表示設定を追加しました。Rounded Bar / Horizontal Bar を選択できます。
+- 図書管理の図書修正画面に「進展全部リセット」と「メモ全部リセット」ボタンを追加しました。実行時は警告と管理者パスワード検証が必要です。
+- 管理パネルに「メモまとめ管理」を追加しました。本ごと、ユーザーごとにメモを絞り込み、修正・削除できます。
+- 進展管理ページの「章ごと完成度」に丸いチャート切り替えボタンを追加しました。
+- 「章ごと完成度」の拡大モーダルでは、PC版でRounded BarとHorizontal Barを左右に並べて確認できるようにしました。
+- モバイル版の「章ごと完成度」拡大モーダルでは、現在選択中のチャートだけを表示し、右上の切り替えボタンで表示を切り替えられるようにしました。
+
+### Changed
+
+- マインドマップは、図書設定の詳細度に応じて章・節・小節の表示範囲を切り替えるようにしました。
+- `.rpm-memo-button` の文字サイズを `1.2rem` に統一しました。
+- READMEをv2.3.0の機能に合わせて更新しました。
+- バージョンをv2.3.0へ更新しました。
+
+### Security
+
+- 全進展リセット・全メモリセットはPOST + CSRF + 管理者パスワード検証が必要です。
+- メモまとめ管理の保存内容は一行テキストとして正規化し、改行を保存しないようにしました。
+
+### SQL
+
+- SQL変更あり。
+- `books.mindmap_depth` を追加しました。
+- `books.chapter_chart_style` を追加しました。
+- 既存DB用に `database-sample/migration_v2.3.0.sql` を追加しました。
+
 ## v2.1.0
 
 ### Fixed
