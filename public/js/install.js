@@ -1,0 +1,5 @@
+(()=>{
+  function genPath(){const c='abcdefghijklmnopqrstuvwxyz0123456789';let s='';for(let i=0;i<16;i++)s+=c[Math.floor(Math.random()*c.length)];const input=document.getElementById('sn-admin-path');if(input)input.value=s;}
+  function saveUrl(type){const id=type==='admin'?'sn-admin-url':'sn-index-url';const el=document.getElementById(id);if(!el)return;const url=el.href;const name=type==='admin'?'ShioriNote-Admin.url':'ShioriNote.url';const body='[InternetShortcut]\r\nURL='+url+'\r\n';const blob=new Blob([body],{type:'application/octet-stream'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();const obj=a.href;a.remove();setTimeout(()=>URL.revokeObjectURL(obj),1000);}
+  document.addEventListener('click',ev=>{const gen=ev.target.closest?.('[data-sn-gen-path]');if(gen){ev.preventDefault();genPath();return}const save=ev.target.closest?.('[data-sn-save-url]');if(save){ev.preventDefault();saveUrl(save.dataset.snSaveUrl||'index')}});
+})();

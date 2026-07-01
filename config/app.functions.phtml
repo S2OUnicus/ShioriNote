@@ -14,7 +14,7 @@ if (!function_exists('role_label_ja')) {
             'super_admin' => '総管理',
             'admin' => '管理者',
             'user' => 'ユーザー',
-            'banned' => '禁止され',
+            'banned' => '禁止中',
             default => '未定義',
         };
     }
@@ -30,4 +30,100 @@ if (!function_exists('progress_bucket_for_book')) {
         return $bucket === 'hourly' ? 'hourly' : 'daily';
     }
 }
+
+if (!function_exists('status_label_ja')) {
+    function status_label_ja(string $status): string
+    {
+        return match ($status) {
+            'active' => '有効',
+            'suspended' => '停止中',
+            default => '未定義',
+        };
+    }
+}
+
+if (!function_exists('validate_login_id')) {
+    function validate_login_id(string $loginId): string
+    {
+        $loginId = trim($loginId);
+        if (!preg_match('/^[A-Za-z0-9]{1,16}$/', $loginId)) {
+            throw new InvalidArgumentException('IDは16桁以内の半角英数字で入力してください。');
+        }
+        return $loginId;
+    }
+}
+
+if (!function_exists('login_id_exists')) {
+    function login_id_exists(string $loginId, int $excludeUid = 0): bool
+    {
+        $sql = 'SELECT COUNT(*) FROM users WHERE LOWER(login_id) = LOWER(?)';
+        $params = [$loginId];
+        if ($excludeUid > 0) {
+            $sql .= ' AND uid <> ?';
+            $params[] = $excludeUid;
+        }
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn() > 0;
+    }
+}
+
+if (!function_exists('email_exists')) {
+    function email_exists(string $email, int $excludeUid = 0): bool
+    {
+        $sql = 'SELECT COUNT(*) FROM users WHERE LOWER(email) = LOWER(?)';
+        $params = [$email];
+        if ($excludeUid > 0) {
+            $sql .= ' AND uid <> ?';
+            $params[] = $excludeUid;
+        }
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn() > 0;
+    }
+}
+
+if (!function_exists('parse_toc_text')) {
+    function parse_toc_text(string $text): array
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $rows = [];
+        foreach ($lines as $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+            $raw = str_replace("\t", '    ', rtrim($line));
+            $leading = strlen($raw) - strlen(ltrim($raw, ' '));
+            $level = $leading === 0 ? 1 : ($leading < 8 ? 2 : 3);
+            $title = trim(preg_replace('/^(?:#{1,6}\s*|[-*]\s*)/u', '', trim($raw)) ?? trim($raw));
+            if ($title === '') {
+                continue;
+            }
+            $rows[] = ['level' => $level, 'title' => clean_text($title, 255)];
+        }
+        return $rows;
+    }
+}
+
+if (!function_exists('book_owned_by_current_user')) {
+    function book_owned_by_current_user(array $book, ?array $user = null): bool
+    {
+        $user ??= current_user();
+        return $user && (int)($book['created_by'] ?? 0) === (int)$user['uid'];
+    }
+}
+
+if (!function_exists('require_own_book')) {
+    function require_own_book(int $bookId, ?array $user = null): array
+    {
+        $user ??= require_not_banned();
+        $book = get_book($bookId);
+        if (!$book || !book_owned_by_current_user($book, $user)) {
+            http_response_code(403);
+            throw new RuntimeException('この図書を管理する権限がありません。');
+        }
+        return $book;
+    }
+}
+
 ?>

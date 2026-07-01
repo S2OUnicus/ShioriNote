@@ -47,7 +47,7 @@ try {
     $route = app_route();
     $name = $route['name'];
     $routeId = $route['id'];
-    $allowed = ['index', 'books', 'book', 'progress', 'login', 'logout', 'register', 'forgot', 'user', 'admin'];
+    $allowed = ['index', 'books', 'book', 'progress', 'login', 'logout', 'register', 'forgot', 'user', 'my-books', 'admin'];
     if (!in_array($name, $allowed, true)) {
         http_response_code(404);
         $name = 'index';
@@ -88,6 +88,7 @@ try {
         'books' => 'books_grid',
         'book' => 'book_detail',
         'user' => 'user_center',
+        'my-books' => 'my_books',
         default => $name,
     } . '.phtml';
     if (!is_file($file)) {
@@ -102,6 +103,7 @@ try {
         'register' => '新規登録',
         'forgot' => 'パスワード忘れ',
         'user' => 'ユーザーセンター',
+        'my-books' => '図書管理',
         'admin' => '管理システム',
         default => 'インデックス',
     });

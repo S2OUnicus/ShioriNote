@@ -1,5 +1,5 @@
 <?php
-$pageDescription = 'UID、ID、メールでログインできます。';
+$pageDescription = 'IDまたはメールでログインできます。';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $login = trim((string)($_POST['login'] ?? ''));
@@ -7,8 +7,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($login === '' || $password === '') {
         app_flash('danger', 'ログイン情報を入力してください。');
     } else {
-        $stmt = db()->prepare('SELECT * FROM users WHERE uid = ? OR login_id = ? OR email = ? LIMIT 1');
-        $stmt->execute([(int)$login, $login, $login]);
+        $stmt = db()->prepare('SELECT * FROM users WHERE LOWER(login_id) = LOWER(?) OR LOWER(email) = LOWER(?) LIMIT 1');
+        $stmt->execute([$login, $login]);
         $user = $stmt->fetch();
         if ($user && verify_password_bundle($password, $user['password_salt'], $user['password_hash'])) {
             session_regenerate_id(true);
@@ -21,4 +21,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         app_flash('danger', 'ログイン情報が正しくありません。');
     }
 }
-?><section class="uk-card uk-card-default uk-card-body rpm-card rpm-login-card"><h1>ログイン</h1><form method="post" action="<?php echo e(url_for('login')); ?>"><?php echo csrf_field(); ?><div class="uk-margin"><label>ID / メール / UID<input class="uk-input" name="login" autocomplete="username" required></label></div><div class="uk-margin"><label>パスワード<input class="uk-input" type="password" name="password" autocomplete="current-password" required></label></div><button class="uk-button uk-button-primary" type="submit">ログイン</button><a class="uk-button uk-button-text uk-margin-left" href="<?php echo e(url_for('forgot')); ?>">パスワード忘れ</a><?php if (registration_enabled()): ?><a class="uk-button uk-button-text uk-margin-left" href="<?php echo e(url_for('register')); ?>">新規登録</a><?php else: ?><p class="uk-text-meta uk-margin-small-top">現在、新規登録は停止されています。</p><?php endif; ?></form></section>
+?><section class="uk-card uk-card-default uk-card-body rpm-card rpm-login-card"><h1>ログイン</h1><form method="post" action="<?php echo e(url_for('login')); ?>"><?php echo csrf_field(); ?><div class="uk-margin"><label>ID / メール<input class="uk-input" name="login" autocomplete="username" required></label></div><div class="uk-margin"><label>パスワード<input class="uk-input" type="password" name="password" autocomplete="current-password" required></label></div><button class="uk-button uk-button-primary" type="submit">ログイン</button><a class="uk-button uk-button-text uk-margin-left" href="<?php echo e(url_for('forgot')); ?>">パスワード忘れ</a><?php if (registration_enabled()): ?><a class="uk-button uk-button-text uk-margin-left" href="<?php echo e(url_for('register')); ?>">新規登録</a><?php else: ?><p class="uk-text-meta uk-margin-small-top">現在、新規登録は停止されています。</p><?php endif; ?></form></section>

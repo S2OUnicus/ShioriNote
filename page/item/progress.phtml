@@ -137,7 +137,13 @@ if (!function_exists('sn_toc_children_by_parent')) {
     function sn_render_progress_summary(array $user, array $book, array $bookProgress, float $overall, string $bucketType, bool $oob = false): void
     {
         $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
-        ?><div id="rpm-progress-summary"<?php echo $oobAttr; ?>><section class="uk-margin-bottom rpm-progress-head"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap"><div><h1><?php echo e($book['title']); ?></h1><p class="rpm-muted">管理単位：<?php echo e(match($book['progress_unit']) {'chapter'=>'章','subsection'=>'小節',default=>'節'}); ?> / 表示時間：<?php echo e($bucketType === 'hourly' ? '時間別' : '日別'); ?> / Timezone: <?php echo e($user['timezone']); ?></p></div><?php if ($overall >= 100): ?><div class="rpm-stamp">完結</div><?php endif; ?></div><div class="rpm-progress-wrap"><progress class="uk-progress" value="<?php echo e((string)$overall); ?>" max="100"></progress><span class="rpm-progress-number"><?php echo e((string)$overall); ?>%</span></div></section><section class="uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>基本情報</h2><div class="rpm-basic-info"><div class="rpm-info-pill"><strong>図書名</strong><?php echo e($book['title']); ?></div><div class="rpm-info-pill"><strong>開始時間</strong><?php echo e(utc_to_user($bookProgress['start_at_utc'] ?? '', $user) ?: '未設定'); ?></div><div class="rpm-info-pill"><strong>完結時間</strong><?php echo e(utc_to_user($bookProgress['completed_at_utc'] ?? '', $user) ?: '未設定'); ?></div></div></section></div><?php
+        ?><div id="rpm-progress-summary"<?php echo $oobAttr; ?>><section class="uk-margin-bottom rpm-progress-head"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap"><div><h1><?php echo e($book['title']); ?></h1><p class="rpm-muted">管理単位：<?php echo e(match($book['progress_unit']) {'chapter'=>'章','subsection'=>'小節',default=>'節'}); ?> / 表示時間：<?php echo e($bucketType === 'hourly' ? '時間別' : '日別'); ?> / タイムゾーン：<?php echo e($user['timezone']); ?></p></div><?php if ($overall >= 100): ?><div class="rpm-stamp">完結</div><?php endif; ?></div><div class="rpm-progress-wrap"><progress class="uk-progress" value="<?php echo e((string)$overall); ?>" max="100"></progress><span class="rpm-progress-number"><?php echo e((string)$overall); ?>%</span></div></section></div><?php
+    }
+
+    function sn_render_progress_status(array $user, array $book, array $bookProgress, bool $oob = false): void
+    {
+        $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
+        ?><section id="rpm-progress-status" class="uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>進展状況</h2><div class="rpm-basic-info"><div class="rpm-info-pill"><strong>図書名</strong><?php echo e($book['title']); ?></div><div class="rpm-info-pill"><strong>開始時間</strong><?php echo e(utc_to_user($bookProgress['start_at_utc'] ?? '', $user) ?: '未設定'); ?></div><div class="rpm-info-pill"><strong>完結時間</strong><?php echo e(utc_to_user($bookProgress['completed_at_utc'] ?? '', $user) ?: '未設定'); ?></div></div></section><?php
     }
 
     function sn_chart_card(string $title, string $chartId, string $modalId, string $modalChartId): void
@@ -147,8 +153,8 @@ if (!function_exists('sn_toc_children_by_parent')) {
 
     function sn_chapter_chart_card(string $style): void
     {
-        $label = $style === 'horizontal' ? 'Horizontal' : 'Rounded';
-        ?><div class="uk-card uk-card-default uk-card-body rpm-card rpm-chapter-chart-card" data-current-style="<?php echo e($style); ?>"><div class="rpm-chart-title-row"><h2 class="rpm-chart-title"><a href="#modal-chart-chapter" uk-toggle>章ごと完成度</a></h2><button class="uk-button uk-button-default rpm-round-toggle rpm-chart-toggle" type="button" data-chart-area="main" title="Rounded / Horizontal 切り替え"><?php echo e($label); ?></button></div><div id="chart-polar" class="rpm-chart" data-chart-role="chapter-main"></div></div><div id="modal-chart-chapter" class="uk-modal-container rpm-chart-modal rpm-chapter-chart-modal" uk-modal><div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical"><button class="uk-modal-close-default" type="button" uk-close></button><div class="rpm-chart-title-row"><h2>章ごと完成度</h2><button class="uk-button uk-button-default rpm-round-toggle rpm-chart-toggle rpm-modal-mobile-toggle" type="button" data-chart-area="modal" title="Rounded / Horizontal 切り替え"><?php echo e($label); ?></button></div><div class="rpm-chapter-modal-pc"><section><h3>Rounded Bar</h3><div id="chart-chapter-rounded-modal" class="rpm-chart rpm-chart-large"></div></section><section><h3>Horizontal Bar</h3><div id="chart-chapter-horizontal-modal" class="rpm-chart rpm-chart-large"></div></section></div><div class="rpm-chapter-modal-mobile"><div id="chart-chapter-mobile-modal" class="rpm-chart rpm-chart-large"></div></div></div></div><?php
+        $label = $style === 'horizontal' ? '横棒' : '丸棒';
+        ?><div class="uk-card uk-card-default uk-card-body rpm-card rpm-chapter-chart-card" data-current-style="<?php echo e($style); ?>"><div class="rpm-chart-title-row"><h2 class="rpm-chart-title"><a href="#modal-chart-chapter" uk-toggle>章ごと完成度</a></h2><button class="uk-button uk-button-default rpm-round-toggle rpm-chart-toggle" type="button" data-chart-area="main" title="丸棒 / 横棒 切り替え"><?php echo e($label); ?></button></div><div id="chart-polar" class="rpm-chart" data-chart-role="chapter-main"></div></div><div id="modal-chart-chapter" class="uk-modal-container rpm-chart-modal rpm-chapter-chart-modal" uk-modal><div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical"><button class="uk-modal-close-default" type="button" uk-close></button><div class="rpm-chart-title-row"><h2>章ごと完成度</h2><button class="uk-button uk-button-default rpm-round-toggle rpm-chart-toggle rpm-modal-mobile-toggle" type="button" data-chart-area="modal" title="丸棒 / 横棒 切り替え"><?php echo e($label); ?></button></div><div class="rpm-chapter-modal-pc"><section><h3>丸棒</h3><div id="chart-chapter-rounded-modal" class="rpm-chart rpm-chart-large"></div></section><section><h3>横棒</h3><div id="chart-chapter-horizontal-modal" class="rpm-chart rpm-chart-large"></div></section></div><div class="rpm-chapter-modal-mobile"><div id="chart-chapter-mobile-modal" class="rpm-chart rpm-chart-large"></div></div></div></div><?php
     }
 
     function sn_render_chart_zone(string $chartData, array $book, bool $oob = false): void
@@ -200,7 +206,8 @@ if (!function_exists('sn_toc_children_by_parent')) {
         foreach ($chapters as $chapter) {
             $chapterNodes[] = sn_mindmap_node($chapter, $childrenByParent, $maxLevel);
         }
-        return ['name' => $book['title'], 'children' => $chapterNodes];
+        $rootMode = (string)($book['mindmap_root'] ?? 'chapter');
+        return ['name' => $rootMode === 'book' ? $book['title'] : '', 'children' => $chapterNodes, 'rootMode' => $rootMode === 'book' ? 'book' : 'chapter'];
     }
 
     function sn_render_mindmap_summary(array $book, array $toc, bool $oob = false): void
@@ -213,26 +220,27 @@ if (!function_exists('sn_toc_children_by_parent')) {
     function sn_render_achievement_summary(array $summaryRows, string $bucketType, bool $oob = false): void
     {
         $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
-        ?><details id="rpm-achievement-summary" class="rpm-achievement-summary uk-margin-top"<?php echo $oobAttr; ?>><summary>達成記録</summary><?php if (!$summaryRows): ?><p class="rpm-muted uk-margin-small-top">まだ達成記録がありません。</p><?php else: ?><div class="rpm-achievement-table-wrap"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th><?php echo e($bucketType === 'hourly' ? '時間' : '日付'); ?></th><th>達成数</th><th>達成した項目</th></tr></thead><tbody><?php foreach ($summaryRows as $row): ?><tr><td><?php echo e($row['label']); ?></td><td><?php echo e($row['count']); ?></td><td><?php echo e(implode(' / ', $row['items'])); ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?></details><?php
+        ?><details id="rpm-achievement-summary" class="rpm-achievement-summary uk-margin-top"<?php echo $oobAttr; ?>><summary>達成記録</summary><?php if (!$summaryRows): ?><p class="rpm-muted uk-margin-small-top">まだ達成記録がありません。</p><?php else: ?><div class="rpm-achievement-table-wrap"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th><?php echo e($bucketType === 'hourly' ? '時間' : '日付'); ?></th><th>達成数</th><th>達成した項目</th></tr></thead><tbody><?php foreach ($summaryRows as $row): ?><tr><td><?php echo e($row['label']); ?></td><td><?php echo e($row['count']); ?></td><td><ul class="rpm-achievement-items"><?php foreach ($row['items'] as $doneItem): ?><li><?php echo e($doneItem); ?></li><?php endforeach; ?></ul></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?></details><?php
     }
 
     function sn_render_toc_row(array $item, bool $isTarget, array $progressByToc, array $user): void
     {
         $tocTitle = $item['display_title'] ?? $item['title'];
         if (!$isTarget) {
-            ?><li class="rpm-toc-row level-<?php echo e($item['level']); ?> rpm-toc-row-static"><span></span><span class="rpm-toc-title"><?php echo e($tocTitle); ?></span><span></span><span></span><span></span></li><?php
             return;
         }
         $tocId = (int)$item['toc_id'];
         $p = $progressByToc[$tocId] ?? ['percent'=>0,'memo'=>'','completed_at_utc'=>null];
-        $memo = trim(str_replace(["\r", "\n"], ' ', (string)($p['memo'] ?? '')));
+        $memo = trim(str_replace(["
+", "
+"], ' ', (string)($p['memo'] ?? '')));
         $modalId = 'rpm-memo-modal-' . $tocId;
-        ?><li class="rpm-toc-row level-<?php echo e($item['level']); ?>">
-            <input class="uk-checkbox rpm-progress-check" type="checkbox" <?php echo ((int)$p['percent'] === 100) ? 'checked' : ''; ?> aria-label="読了">
+        ?><li class="rpm-toc-row level-<?php echo e($item['level']); ?>" data-toc-id="<?php echo e($tocId); ?>">
+            <input class="uk-checkbox rpm-progress-check" type="checkbox" <?php echo ((int)$p['percent'] === 100) ? 'checked' : ''; ?> aria-label="完了">
             <span class="rpm-toc-title"<?php if ($memo !== ''): ?> uk-tooltip="<?php echo e($memo); ?>"<?php endif; ?>><?php echo e($tocTitle); ?></span>
-            <input class="uk-input rpm-percent-input" type="number" name="progress[<?php echo e($tocId); ?>]" min="0" max="100" step="1" value="<?php echo e($p['percent']); ?>" inputmode="numeric">
+            <input class="uk-input rpm-percent-input" type="number" min="0" max="100" step="1" name="progress[<?php echo e($tocId); ?>]" value="<?php echo e($p['percent'] ?? 0); ?>" aria-label="進展度">
             <input class="uk-input rpm-item-completed-input" type="datetime-local" name="completed_at_item[<?php echo e($tocId); ?>]" value="<?php echo e(utc_to_user($p['completed_at_utc'] ?? '', $user, 'Y-m-d\TH:i')); ?>" aria-label="完成時間">
-            <button id="rpm-memo-button-<?php echo e($tocId); ?>" class="uk-button rpm-button-soft rpm-memo-button<?php echo $memo !== '' ? ' has-memo' : ''; ?>" type="button" uk-toggle="target: #<?php echo e($modalId); ?>"><?php echo $memo !== '' ? 'メモあり' : 'メモ'; ?></button>
+            <button id="rpm-memo-button-<?php echo e($tocId); ?>" class="uk-button uk-button-default rpm-memo-button<?php echo $memo !== '' ? ' has-memo' : ''; ?>" type="button" uk-toggle="target: #<?php echo e($modalId); ?>"><?php echo $memo !== '' ? 'メモ有' : 'メモ'; ?></button>
             <input id="rpm-memo-hidden-<?php echo e($tocId); ?>" class="rpm-memo-hidden" type="hidden" name="memo[<?php echo e($tocId); ?>]" value="<?php echo e($memo); ?>">
             <div id="<?php echo e($modalId); ?>" class="uk-modal rpm-memo-modal" uk-modal>
                 <div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical">
@@ -266,14 +274,25 @@ if (!function_exists('sn_toc_children_by_parent')) {
 
     function sn_render_toc_list(array $tocItems, array $book, array $progressByToc, array $user): void
     {
-        ?><ul class="rpm-toc uk-margin-top"><?php foreach ($tocItems as $item): $isTarget = (int)$item['level'] === target_toc_level((string)$book['progress_unit']); sn_render_toc_row($item, $isTarget, $progressByToc, $user); endforeach; ?></ul><?php
+        $targetLevel = target_toc_level((string)$book['progress_unit']);
+        $chapter = null;
+        foreach ($tocItems as $candidate) {
+            if ((int)$candidate['level'] === 1) {
+                $chapter = $candidate;
+                break;
+            }
+        }
+        if ($chapter): ?><div class="rpm-toc-chapter-heading"><?php echo e($chapter['display_title'] ?? $chapter['title']); ?></div><?php endif; ?>
+        <div class="rpm-toc-scroll"><ul class="rpm-toc uk-margin-top"><li class="rpm-toc-header"><span>完了</span><span><?php echo e($targetLevel === 3 ? '小節名' : ($targetLevel === 1 ? '章名' : '節名')); ?></span><span>進展度</span><span>完成時間</span><span>メモ</span></li><?php foreach ($tocItems as $item): $isTarget = (int)$item['level'] === $targetLevel; sn_render_toc_row($item, $isTarget, $progressByToc, $user); endforeach; ?></ul></div><?php
     }
 
     function sn_render_toc_section(array $user, array $book, array $bookProgress, array $toc, array $targetItems, array $progressByToc, array $summaryRows, string $bucketType, bool $oob = false): void
     {
         $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
         $chapters = array_values(array_filter($toc, fn($x) => (int)$x['level'] === 1));
-        ?><div id="rpm-toc-section"<?php echo $oobAttr; ?>><div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>開始時間<input id="rpm-start-at-input" class="uk-input" type="datetime-local" name="start_at" value="<?php echo e(utc_to_user($bookProgress['start_at_utc'] ?? '', $user, 'Y-m-d\TH:i')); ?>"></label><label>完結時間<?php sn_render_completed_input($user, $bookProgress); ?></label></div><?php sn_render_achievement_summary($summaryRows, $bucketType); ?><?php if (!$targetItems): ?><p class="uk-alert-warning">管理対象の目次がありません。管理システムから目次を導入してください。</p><?php else: ?><?php if (count($chapters) >= 2): ?><ul class="uk-tab rpm-chapter-tabs" uk-tab><?php foreach ($chapters as $i => $chapter): $plain = $chapter['plain_title'] ?? $chapter['title']; ?><li><a href="#" uk-tooltip="<?php echo e('第 ' . ($i + 1) . ' 章 ' . $plain); ?>"><?php echo e('第 ' . ($i + 1) . ' 章'); ?></a></li><?php endforeach; ?></ul><ul class="uk-switcher rpm-chapter-switcher"><?php foreach ($chapters as $chapter): ?><li><?php sn_render_toc_list(sn_items_in_chapter($toc, (int)$chapter['toc_id']), $book, $progressByToc, $user); ?></li><?php endforeach; ?></ul><?php else: ?><?php sn_render_toc_list($toc, $book, $progressByToc, $user); ?><?php endif; ?><?php endif; ?></div><?php
+        $activeChapter = max(0, (int)($_POST['active_chapter'] ?? $_GET['chapter'] ?? 0));
+        if ($activeChapter >= count($chapters)) { $activeChapter = 0; }
+        ?><div id="rpm-toc-section" data-active-chapter="<?php echo e($activeChapter); ?>"<?php echo $oobAttr; ?>><div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>開始時間<input id="rpm-start-at-input" class="uk-input" type="datetime-local" name="start_at" value="<?php echo e(utc_to_user($bookProgress['start_at_utc'] ?? '', $user, 'Y-m-d\TH:i')); ?>"></label><label>完結時間<?php sn_render_completed_input($user, $bookProgress); ?></label></div><input id="rpm-active-chapter" type="hidden" name="active_chapter" value="<?php echo e($activeChapter); ?>"><?php if (!$targetItems): ?><p class="uk-alert-warning">管理対象の目次がありません。管理システムまたは図書管理から目次を導入してください。</p><?php else: ?><?php if (count($chapters) >= 2): ?><ul class="uk-tab rpm-chapter-tabs" uk-tab><?php foreach ($chapters as $i => $chapter): $plain = $chapter['plain_title'] ?? $chapter['title']; ?><li class="<?php echo $i === $activeChapter ? 'uk-active' : ''; ?>"><a href="#" data-chapter-index="<?php echo e($i); ?>" uk-tooltip="<?php echo e('第 ' . ($i + 1) . ' 章 ' . $plain); ?>"><?php echo e('第 ' . ($i + 1) . ' 章'); ?></a></li><?php endforeach; ?></ul><ul class="uk-switcher rpm-chapter-switcher"><?php foreach ($chapters as $i => $chapter): ?><li class="<?php echo $i === $activeChapter ? 'uk-active' : ''; ?>"><?php sn_render_toc_list(sn_items_in_chapter($toc, (int)$chapter['toc_id']), $book, $progressByToc, $user); ?></li><?php endforeach; ?></ul><?php else: ?><?php sn_render_toc_list($toc, $book, $progressByToc, $user); ?><?php endif; ?><?php endif; ?><?php sn_render_achievement_summary($summaryRows, $bucketType); ?></div><?php
     }
 }
 
@@ -332,7 +351,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ctx = sn_progress_context($user, $book, $toc, $targetItems, $progressByToc);
         if (strtolower($_SERVER['HTTP_HX_REQUEST'] ?? '') === 'true') {
             header('HX-Trigger: shiorinoteProgressSaved');
-            ?><div class="uk-alert-success rpm-autosave-alert" uk-alert><p>保存しました。</p></div><?php sn_render_progress_summary($user, $book, $bookProgress, (float)$ctx['overall'], (string)$ctx['bucketType'], true); sn_render_chart_zone((string)$ctx['chartData'], $book, true); sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], (string)$ctx['bucketType'], true); exit;
+            ?><div class="uk-alert-success rpm-autosave-alert" uk-alert><p>保存しました。</p></div><?php sn_render_progress_summary($user, $book, $bookProgress, (float)$ctx['overall'], (string)$ctx['bucketType'], true); sn_render_progress_status($user, $book, $bookProgress, true); sn_render_chart_zone((string)$ctx['chartData'], $book, true); sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], (string)$ctx['bucketType'], true); exit;
         }
         app_flash('success', '読書進展を保存しました。');
         if ($isAdminProgress) {
@@ -357,4 +376,4 @@ $bucketType = (string)$ctx['bucketType'];
 $chartData = (string)$ctx['chartData'];
 ?>
 <?php if ($isAdminProgress): ?><section class="uk-alert-warning rpm-admin-progress-warning" uk-alert><p>今は「<?php echo e(role_label_ja((string)($progressAdmin['role'] ?? 'admin'))); ?>」として、<?php echo e($user['login_id']); ?> さんの「<?php echo e($book['title']); ?>」を管理します。</p><p><a href="<?php echo e($progressBackUrl); ?>">ユーザー別進展管理へ戻る</a></p></section><?php endif; ?>
-<div class="rpm-progress-layout"><aside class="rpm-progress-side"><?php sn_render_progress_summary($user, $book, $bookProgress, $overall, $bucketType); ?><?php sn_render_chart_zone($chartData, $book); ?><section class="uk-card uk-card-default uk-card-body rpm-card uk-margin-large"><h2>図書の基本情報カード</h2><div class="rpm-book-info-card"><img class="rpm-book-cover-sm" src="<?php echo e(asset_url($book['cover_path'] ?: '/upload/book/default-cover.svg')); ?>" alt="<?php echo e($book['title']); ?>"><div><h3><?php echo e($book['title']); ?></h3><p class="uk-text-meta"><?php echo e($book['author'] ?: '作者未設定'); ?> / <?php echo e($book['publisher'] ?: '発行機関未設定'); ?></p><p><?php echo nl2br(e($book['memo'] ?: 'メモはまだありません。')); ?></p></div></div></section></aside><section class="rpm-progress-main"><?php sn_render_mindmap_summary($book, $toc); ?><form id="rpm-progress-form" class="rpm-progress-form uk-card uk-card-default uk-card-body rpm-card" method="post" action="<?php echo e($progressAction); ?>" hx-post="<?php echo e($progressAction); ?>" hx-target="#rpm-autosave-status" hx-swap="innerHTML"><?php echo csrf_field(); ?><input type="hidden" name="action" value="progress_save"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap rpm-form-head"><h2>目次進展</h2><div id="rpm-autosave-status" class="rpm-autosave-status" aria-live="polite"></div></div><?php sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], $bucketType); ?></form></section></div>
+<div class="rpm-progress-page"><div class="rpm-progress-top"><?php sn_render_progress_summary($user, $book, $bookProgress, $overall, $bucketType); ?></div><div id="rpm-progress-body" class="rpm-progress-layout"><aside class="rpm-progress-side"><section class="uk-card uk-card-default uk-card-body rpm-card rpm-book-info-card-section"><h2>図書情報</h2><div class="rpm-book-info-card"><img class="rpm-book-cover-sm" src="<?php echo e(asset_url($book['cover_path'] ?: '/upload/book/default-cover.svg')); ?>" alt="<?php echo e($book['title']); ?>"><div><h3><?php echo e($book['title']); ?></h3><p class="uk-text-meta"><?php echo e($book['author'] ?: '作者未設定'); ?> / <?php echo e($book['publisher'] ?: '発行機関未設定'); ?></p><p><?php echo nl2br(e($book['memo'] ?: 'メモはまだありません。')); ?></p></div></div></section><?php sn_render_chart_zone($chartData, $book); ?><?php sn_render_progress_status($user, $book, $bookProgress); ?></aside><section class="rpm-progress-main"><?php sn_render_mindmap_summary($book, $toc); ?><form id="rpm-progress-form" class="rpm-progress-form uk-card uk-card-default uk-card-body rpm-card" method="post" action="<?php echo e($progressAction); ?>" hx-post="<?php echo e($progressAction); ?>" hx-target="#rpm-autosave-status" hx-swap="innerHTML"><?php echo csrf_field(); ?><input type="hidden" name="action" value="progress_save"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap rpm-form-head"><h2>目次進展</h2><div id="rpm-autosave-status" class="rpm-autosave-status" aria-live="polite"></div></div><?php sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], $bucketType); ?></form></section></div></div>

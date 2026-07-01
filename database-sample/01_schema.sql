@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS books (
     progress_unit ENUM('chapter','section','subsection') NOT NULL DEFAULT 'section',
     progress_time_bucket ENUM('daily','hourly') NOT NULL DEFAULT 'daily',
     mindmap_depth ENUM('chapter','section','subsection') NOT NULL DEFAULT 'section',
+    mindmap_root ENUM('chapter','book') NOT NULL DEFAULT 'chapter',
     chapter_chart_style ENUM('rounded','horizontal') NOT NULL DEFAULT 'rounded',
     created_by INT UNSIGNED NULL,
     created_at_utc DATETIME(6) NOT NULL DEFAULT (UTC_TIMESTAMP(6)),

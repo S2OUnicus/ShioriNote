@@ -24,7 +24,7 @@ if (!function_exists('parse_toc_text')) {
     }
 }
 
-$validViews = ['site', 'users', 'books', 'progress', 'progress_edit', 'notes', 'other'];
+$validViews = ['site', 'users', 'books', 'progress', 'progress_edit', 'notes'];
 $view = (string)($_GET['view'] ?? 'site');
 if (!in_array($view, $validViews, true)) {
     $view = 'site';
@@ -68,10 +68,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $unit = in_array((string)($_POST['progress_unit'] ?? 'section'), ['chapter','section','subsection'], true) ? (string)$_POST['progress_unit'] : 'section';
         $bucket = (($_POST['progress_time_bucket'] ?? 'daily') === 'hourly') ? 'hourly' : 'daily';
         $mindmapDepth = in_array((string)($_POST['mindmap_depth'] ?? 'section'), ['chapter','section','subsection'], true) ? (string)$_POST['mindmap_depth'] : 'section';
+        $mindmapRoot = (($_POST['mindmap_root'] ?? 'chapter') === 'book') ? 'book' : 'chapter';
         $chapterChartStyle = (($_POST['chapter_chart_style'] ?? 'rounded') === 'horizontal') ? 'horizontal' : 'rounded';
         $cover = safe_image_upload($_FILES['cover'] ?? [], app_config('uploads')['book_dir'], 'book') ?? '';
-        $stmt = db()->prepare('INSERT INTO books(title,author,publisher,cover_path,memo,progress_unit,progress_time_bucket,mindmap_depth,chapter_chart_style,created_by,created_at_utc,updated_at_utc) VALUES(?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))');
-        $stmt->execute([$title, $author, $publisher, $cover, $memo, $unit, $bucket, $mindmapDepth, $chapterChartStyle, (int)$admin['uid']]);
+        $stmt = db()->prepare('INSERT INTO books(title,author,publisher,cover_path,memo,progress_unit,progress_time_bucket,mindmap_depth,mindmap_root,chapter_chart_style,created_by,created_at_utc,updated_at_utc) VALUES(?,?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))');
+        $stmt->execute([$title, $author, $publisher, $cover, $memo, $unit, $bucket, $mindmapDepth, $mindmapRoot, $chapterChartStyle, (int)$admin['uid']]);
         app_flash('success', '図書を追加しました。続けて目次を導入できます。');
         header('Location: ' . sn_admin_url('books', ['book_created' => (int)db()->lastInsertId()]));
         exit;
@@ -96,10 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $unit = in_array((string)($_POST['progress_unit'] ?? 'section'), ['chapter','section','subsection'], true) ? (string)$_POST['progress_unit'] : 'section';
         $bucket = (($_POST['progress_time_bucket'] ?? 'daily') === 'hourly') ? 'hourly' : 'daily';
         $mindmapDepth = in_array((string)($_POST['mindmap_depth'] ?? 'section'), ['chapter','section','subsection'], true) ? (string)$_POST['mindmap_depth'] : 'section';
+        $mindmapRoot = (($_POST['mindmap_root'] ?? 'chapter') === 'book') ? 'book' : 'chapter';
         $chapterChartStyle = (($_POST['chapter_chart_style'] ?? 'rounded') === 'horizontal') ? 'horizontal' : 'rounded';
         $cover = safe_image_upload($_FILES['cover'] ?? [], app_config('uploads')['book_dir'], 'book') ?? (string)$book['cover_path'];
-        $stmt = db()->prepare('UPDATE books SET title=?, author=?, publisher=?, cover_path=?, memo=?, progress_unit=?, progress_time_bucket=?, mindmap_depth=?, chapter_chart_style=?, updated_at_utc=UTC_TIMESTAMP(6) WHERE book_id=?');
-        $stmt->execute([$title, $author, $publisher, $cover, $memo, $unit, $bucket, $mindmapDepth, $chapterChartStyle, $bookId]);
+        $stmt = db()->prepare('UPDATE books SET title=?, author=?, publisher=?, cover_path=?, memo=?, progress_unit=?, progress_time_bucket=?, mindmap_depth=?, mindmap_root=?, chapter_chart_style=?, updated_at_utc=UTC_TIMESTAMP(6) WHERE book_id=?');
+        $stmt->execute([$title, $author, $publisher, $cover, $memo, $unit, $bucket, $mindmapDepth, $mindmapRoot, $chapterChartStyle, $bookId]);
         app_flash('success', '図書の基本情報を更新しました。');
         header('Location: ' . sn_admin_url('books', ['edit_book' => $bookId]));
         exit;
@@ -225,7 +227,6 @@ $menu = [
     'books' => '図書管理',
     'progress' => 'ユーザー別進展管理',
     'notes' => 'メモまとめ管理',
-    'other' => 'その他',
 ];
 $tzs = timezone_identifiers_list();
 ?>
@@ -241,74 +242,81 @@ $tzs = timezone_identifiers_list();
     </aside>
     <div id="rpm-admin-content">
         <?php if ($view === 'site'): ?>
-            <section class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>サイト基本管理</h2><?php if (!can_site_settings($admin)): ?><p class="uk-alert-warning">管理者はサイト基本設定を修正できません。</p><?php else: ?><form method="post" action="<?php echo e(sn_admin_url('site')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="settings"><div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>サイト名<input class="uk-input" name="site_name" value="<?php echo e(setting('site_name', app_config('site_name'))); ?>"></label><label>author<input class="uk-input" name="author" value="<?php echo e(setting('author', app_config('author'))); ?>"></label><label>theme-color<input class="uk-input" name="theme_color" value="<?php echo e(setting('theme_color', app_config('theme_color'))); ?>" pattern="#[0-9A-Fa-f]{6}"></label><label>初期Timezone<select class="uk-select" name="default_timezone"><?php foreach ($tzs as $tz): ?><option value="<?php echo e($tz); ?>" <?php echo $tz === setting('default_timezone','Asia/Tokyo') ? 'selected' : ''; ?>><?php echo e($tz); ?></option><?php endforeach; ?></select></label><label>初期進展時間粒度<select class="uk-select" name="progress_time_bucket"><option value="daily" <?php echo setting('progress_time_bucket','daily') === 'daily' ? 'selected' : ''; ?>>日別</option><option value="hourly" <?php echo setting('progress_time_bucket','daily') === 'hourly' ? 'selected' : ''; ?>>時間別</option></select></label><label class="uk-flex uk-flex-middle"><input class="uk-checkbox uk-margin-small-right" type="checkbox" name="rewrite_enabled" <?php echo setting('rewrite_enabled', true) ? 'checked' : ''; ?>>rewriteを使う</label><label class="uk-flex uk-flex-middle"><input class="uk-checkbox uk-margin-small-right" type="checkbox" name="registration_enabled" <?php echo registration_enabled() ? 'checked' : ''; ?>>ユーザー新規登録を許可</label><div class="uk-width-1-1"><div class="uk-alert-primary">管理パネルの現在パス：<code>/<?php echo e(admin_panel_path()); ?></code><br>この値は <code>config/base.inc.phtml</code> の <code>admin_panel_path</code> で定義します。</div></div></div><button class="uk-button uk-button-primary uk-margin-top" type="submit">設定保存</button></form><?php endif; ?></section>
+            <section class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>サイト基本管理</h2><?php if (!can_site_settings($admin)): ?><p class="uk-alert-warning">管理者はサイト基本設定を修正できません。</p><?php else: ?><form method="post" action="<?php echo e(sn_admin_url('site')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="settings"><div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>サイト名<input class="uk-input" name="site_name" value="<?php echo e(setting('site_name', app_config('site_name'))); ?>"></label><label>作者・運営者<input class="uk-input" name="author" value="<?php echo e(setting('author', app_config('author'))); ?>"></label><label>テーマ色<input class="uk-input" name="theme_color" value="<?php echo e(setting('theme_color', app_config('theme_color'))); ?>" pattern="#[0-9A-Fa-f]{6}"></label><label>初期タイムゾーン<select class="uk-select" name="default_timezone"><?php foreach ($tzs as $tz): ?><option value="<?php echo e($tz); ?>" <?php echo $tz === setting('default_timezone','Asia/Tokyo') ? 'selected' : ''; ?>><?php echo e($tz); ?></option><?php endforeach; ?></select></label><label>初期進展時間粒度<select class="uk-select" name="progress_time_bucket"><option value="daily" <?php echo setting('progress_time_bucket','daily') === 'daily' ? 'selected' : ''; ?>>日別</option><option value="hourly" <?php echo setting('progress_time_bucket','daily') === 'hourly' ? 'selected' : ''; ?>>時間別</option></select></label><label class="uk-flex uk-flex-middle"><input class="uk-checkbox uk-margin-small-right" type="checkbox" name="rewrite_enabled" <?php echo setting('rewrite_enabled', true) ? 'checked' : ''; ?>>rewriteを使う</label><label class="uk-flex uk-flex-middle"><input class="uk-checkbox uk-margin-small-right" type="checkbox" name="registration_enabled" <?php echo registration_enabled() ? 'checked' : ''; ?>>ユーザー新規登録を許可</label><div class="uk-width-1-1"><div class="uk-alert-primary">管理パネルの現在パス：<code>/<?php echo e(admin_panel_path()); ?></code><br>この値は <code>config/base.inc.phtml</code> の <code>admin_panel_path</code> で定義します。</div></div></div><button class="uk-button uk-button-primary uk-margin-top" type="submit">設定保存</button></form><?php endif; ?></section>
         <?php elseif ($view === 'users'): ?>
             <?php $users = db()->query('SELECT uid,login_id,email,nickname,avatar_path,timezone,role,status,last_login_at_utc,created_at_utc FROM users ORDER BY uid ASC LIMIT 200')->fetchAll(); ?>
-            <section class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>ユーザー管理</h2><div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>UID</th><th>ID</th><th>メール</th><th>あだ名</th><th>Timezone</th><th>権限/状態</th><th>操作</th></tr></thead><tbody><?php foreach ($users as $u): ?><tr><td><?php echo e($u['uid']); ?></td><td><?php echo e($u['login_id']); ?></td><td><?php echo e($u['email']); ?></td><td><?php echo e($u['nickname']); ?></td><td><?php echo e($u['timezone']); ?></td><td><?php echo e(role_label_ja($u['role'])); ?> / <?php echo e($u['status']); ?></td><td><form class="uk-flex uk-flex-middle rpm-inline-form" method="post" action="<?php echo e(sn_admin_url('users')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="update_user"><input type="hidden" name="uid" value="<?php echo e($u['uid']); ?>"><select class="uk-select uk-form-small" name="role"><option value="developer" <?php echo $u['role']==='developer'?'selected':''; ?>>開発者</option><option value="super_admin" <?php echo $u['role']==='super_admin'?'selected':''; ?>>総管理</option><option value="admin" <?php echo $u['role']==='admin'?'selected':''; ?>>管理者</option><option value="user" <?php echo $u['role']==='user'?'selected':''; ?>>ユーザー</option><option value="banned" <?php echo $u['role']==='banned'?'selected':''; ?>>禁止され</option></select><select class="uk-select uk-form-small" name="status"><option value="active" <?php echo $u['status']==='active'?'selected':''; ?>>active</option><option value="suspended" <?php echo $u['status']==='suspended'?'selected':''; ?>>suspended</option></select><button class="uk-button uk-button-default uk-button-small" type="submit">保存</button></form></td></tr><?php endforeach; ?></tbody></table></div></section>
+            <section class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>ユーザー管理</h2><div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>UID</th><th>ID</th><th>メール</th><th>あだ名</th><th>タイムゾーン</th><th>権限/状態</th><th>操作</th></tr></thead><tbody><?php foreach ($users as $u): ?><tr><td><?php echo e($u['uid']); ?></td><td><?php echo e($u['login_id']); ?></td><td><?php echo e(str_replace('@', '#', (string)$u['email'])); ?></td><td><?php echo e($u['nickname']); ?></td><td><?php echo e($u['timezone']); ?></td><td><?php echo e(role_label_ja((string)$u['role'])); ?> / <?php echo e(status_label_ja((string)$u['status'])); ?></td><td><form class="uk-flex uk-flex-middle rpm-inline-form" method="post" action="<?php echo e(sn_admin_url('users')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="update_user"><input type="hidden" name="uid" value="<?php echo e($u['uid']); ?>"><select class="uk-select uk-form-small" name="role"><option value="developer" <?php echo $u['role']==='developer'?'selected':''; ?>>開発者</option><option value="super_admin" <?php echo $u['role']==='super_admin'?'selected':''; ?>>総管理</option><option value="admin" <?php echo $u['role']==='admin'?'selected':''; ?>>管理者</option><option value="user" <?php echo $u['role']==='user'?'selected':''; ?>>ユーザー</option><option value="banned" <?php echo $u['role']==='banned'?'selected':''; ?>>禁止され</option></select><select class="uk-select uk-form-small" name="status"><option value="active" <?php echo $u['status']==='active'?'selected':''; ?>>有効</option><option value="suspended" <?php echo $u['status']==='suspended'?'selected':''; ?>>停止中</option></select><button class="uk-button uk-button-default uk-button-small" type="submit">保存</button></form></td></tr><?php endforeach; ?></tbody></table></div></section>
         <?php elseif ($view === 'books'): ?>
             <?php
             $books = db()->query('SELECT b.*, COUNT(t.toc_id) AS toc_count FROM books b LEFT JOIN book_toc t ON t.book_id=b.book_id GROUP BY b.book_id ORDER BY b.book_id DESC LIMIT 200')->fetchAll();
-            $editBookId = (int)($_GET['edit_book'] ?? 0);
-            $editBook = $editBookId ? get_book($editBookId) : null;
-            $selectedUnit = $editBook['progress_unit'] ?? 'section';
-            $selectedBucket = $editBook['progress_time_bucket'] ?? 'daily';
-            $selectedMindmapDepth = $editBook['mindmap_depth'] ?? 'section';
-            $selectedChartStyle = $editBook['chapter_chart_style'] ?? 'rounded';
             ?>
             <section class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin">
                 <h2>図書管理</h2>
-                <h3><?php echo $editBook ? '図書の基本情報修正' : '図書追加'; ?></h3>
-                <form method="post" enctype="multipart/form-data" action="<?php echo e(sn_admin_url('books')); ?>">
-                    <?php echo csrf_field(); ?>
-                    <input type="hidden" name="action" value="<?php echo $editBook ? 'update_book' : 'create_book'; ?>">
-                    <?php if ($editBook): ?><input type="hidden" name="book_id" value="<?php echo e($editBook['book_id']); ?>"><?php endif; ?>
-                    <div class="uk-grid-small uk-child-width-1-2@m" uk-grid>
-                        <label>図書名<input class="uk-input" name="title" required value="<?php echo e($editBook['title'] ?? ''); ?>"></label>
-                        <label>作者<input class="uk-input" name="author" value="<?php echo e($editBook['author'] ?? ''); ?>"></label>
-                        <label>発行機関<input class="uk-input" name="publisher" value="<?php echo e($editBook['publisher'] ?? ''); ?>"></label>
-                        <label>写真<input class="uk-input" type="file" name="cover" accept="image/png,image/jpeg,image/webp"></label>
-                        <label>進展管理単位<select class="uk-select" name="progress_unit"><option value="section" <?php echo $selectedUnit==='section'?'selected':''; ?>>節</option><option value="chapter" <?php echo $selectedUnit==='chapter'?'selected':''; ?>>章</option><option value="subsection" <?php echo $selectedUnit==='subsection'?'selected':''; ?>>小節</option></select></label>
-                        <label>進展時間粒度<select class="uk-select" name="progress_time_bucket"><option value="daily" <?php echo $selectedBucket==='daily'?'selected':''; ?>>日別</option><option value="hourly" <?php echo $selectedBucket==='hourly'?'selected':''; ?>>時間別</option></select></label>
-                        <label class="rpm-mindmap-depth-label">マインドマップ詳細度<select class="uk-select" name="mindmap_depth"><option value="chapter" <?php echo $selectedMindmapDepth==='chapter'?'selected':''; ?>>章まで</option><option value="section" <?php echo $selectedMindmapDepth==='section'?'selected':''; ?>>節まで</option><option value="subsection" <?php echo $selectedMindmapDepth==='subsection'?'selected':''; ?>>小節まで</option></select></label>
-                        <label class="rpm-chart-style-label">章ごと完成度 初期チャート<select class="uk-select" name="chapter_chart_style"><option value="rounded" <?php echo $selectedChartStyle==='rounded'?'selected':''; ?>>Rounded Bar</option><option value="horizontal" <?php echo $selectedChartStyle==='horizontal'?'selected':''; ?>>Horizontal Bar</option></select></label>
-                    </div>
-                    <div class="uk-margin"><label>メモ<textarea class="uk-textarea" name="memo" rows="3" maxlength="4000"><?php echo e($editBook['memo'] ?? ''); ?></textarea></label></div>
-                    <button class="uk-button uk-button-primary" type="submit"><?php echo $editBook ? '図書情報保存' : '図書追加'; ?></button>
-                    <?php if ($editBook): ?><a class="uk-button rpm-button-soft uk-margin-small-left" href="<?php echo e(sn_admin_url('books')); ?>">追加フォームへ戻る</a><?php endif; ?>
-                </form>
-                <?php if ($editBook): ?>
-                    <div class="rpm-danger-zone uk-margin-large-top">
-                        <h3>危険操作</h3>
-                        <p class="rpm-muted">以下の操作は取り消しできません。実行するには現在ログイン中の管理者パスワードが必要です。</p>
-                        <div class="rpm-reset-forms">
-                            <form method="post" action="<?php echo e(sn_admin_url('books', ['edit_book' => $editBook['book_id']])); ?>" onsubmit="return confirm('この図書の全ユーザー進展をリセットします。実行しますか？');">
-                                <?php echo csrf_field(); ?>
-                                <input type="hidden" name="action" value="reset_book_progress">
-                                <input type="hidden" name="book_id" value="<?php echo e($editBook['book_id']); ?>">
-                                <label>管理者パスワード<input class="uk-input" type="password" name="admin_password" autocomplete="current-password" required></label>
-                                <button class="uk-button uk-button-danger uk-margin-small-top" type="submit">進展全部リセット</button>
-                            </form>
-                            <form method="post" action="<?php echo e(sn_admin_url('books', ['edit_book' => $editBook['book_id']])); ?>" onsubmit="return confirm('この図書の全ユーザーメモをリセットします。実行しますか？');">
-                                <?php echo csrf_field(); ?>
-                                <input type="hidden" name="action" value="reset_book_notes">
-                                <input type="hidden" name="book_id" value="<?php echo e($editBook['book_id']); ?>">
-                                <label>管理者パスワード<input class="uk-input" type="password" name="admin_password" autocomplete="current-password" required></label>
-                                <button class="uk-button uk-button-danger uk-margin-small-top" type="submit">メモ全部リセット</button>
-                            </form>
-                        </div>
-                    </div>
-                <?php endif; ?>
-                <hr>
-                <h3>目次導入（.txt / .md）</h3>
-                <p class="rpm-muted">フォーマット例：番号なしの章タイトル → インデントした節タイトル → さらにインデントした小節タイトル。画面では「第 1 章 タイトル」「第 1 節 タイトル」のように自動採番して表示します。既存目次は置き換えます。</p>
-                <form method="post" enctype="multipart/form-data" action="<?php echo e(sn_admin_url('books')); ?>">
-                    <?php echo csrf_field(); ?><input type="hidden" name="action" value="import_toc">
-                    <div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>対象図書<select class="uk-select" name="book_id"><?php foreach ($books as $b): ?><option value="<?php echo e($b['book_id']); ?>" <?php echo ((int)($editBook['book_id'] ?? 0)===(int)$b['book_id'])?'selected':''; ?>><?php echo e($b['title']); ?>（目次<?php echo e($b['toc_count']); ?>件）</option><?php endforeach; ?></select></label><label>目次ファイル<input class="uk-input" type="file" name="toc_file" accept=".txt,.md,text/plain,text/markdown" required></label></div>
-                    <button class="uk-button uk-button-primary uk-margin-top" type="submit">目次導入</button>
-                </form>
-                <hr>
-                <h3>登録図書</h3>
-                <div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>ID</th><th>図書名</th><th>作者</th><th>単位</th><th>粒度</th><th>マップ</th><th>章グラフ</th><th>目次</th><th>リンク</th></tr></thead><tbody><?php foreach ($books as $b): ?><tr><td><?php echo e($b['book_id']); ?></td><td><?php echo e($b['title']); ?></td><td><?php echo e($b['author']); ?></td><td><?php echo e(match($b['progress_unit']) {'chapter'=>'章','subsection'=>'小節',default=>'節'}); ?></td><td><?php echo e(($b['progress_time_bucket'] ?? 'daily') === 'hourly' ? '時間別' : '日別'); ?></td><td><?php echo e(match($b['mindmap_depth'] ?? 'section') {'chapter'=>'章まで','subsection'=>'小節まで',default=>'節まで'}); ?></td><td><?php echo e(($b['chapter_chart_style'] ?? 'rounded') === 'horizontal' ? 'Horizontal' : 'Rounded'); ?></td><td><?php echo e($b['toc_count']); ?></td><td><a href="<?php echo e(sn_admin_url('books', ['edit_book'=>$b['book_id']])); ?>">修正</a> / <a href="<?php echo e(url_for('book',['id'=>$b['book_id']])); ?>">紹介</a> / <a href="<?php echo e(url_for('progress',['id'=>$b['book_id']])); ?>">進展</a> / <a href="<?php echo e(sn_admin_url('notes', ['book_id'=>$b['book_id']])); ?>">メモ</a></td></tr><?php endforeach; ?></tbody></table></div>
+                <ul class="uk-tab rpm-admin-book-tabs" uk-tab>
+                    <li><a href="#">図書追加</a></li>
+                    <li><a href="#">目次導入</a></li>
+                    <li><a href="#">登録図書</a></li>
+                </ul>
+                <ul class="uk-switcher uk-margin">
+                    <li>
+                        <form method="post" enctype="multipart/form-data" action="<?php echo e(sn_admin_url('books')); ?>">
+                            <?php echo csrf_field(); ?>
+                            <input type="hidden" name="action" value="create_book">
+                            <div class="rpm-form-preview uk-margin"><img id="admin-cover-preview-new" class="rpm-book-preview" src="<?php echo e(asset_url('/upload/book/default-cover.svg')); ?>" alt="preview"><span class="rpm-muted">選択した図書写真をここで確認できます。</span></div>
+                            <div class="uk-grid-small uk-child-width-1-2@m" uk-grid>
+                                <label>図書名<input class="uk-input" name="title" required></label>
+                                <label>作者<input class="uk-input" name="author"></label>
+                                <label>発行機関<input class="uk-input" name="publisher"></label>
+                                <label>写真<input class="uk-input" type="file" name="cover" accept="image/png,image/jpeg,image/webp" data-preview-target="#admin-cover-preview-new"></label>
+                                <label>進展管理単位<select class="uk-select" name="progress_unit"><option value="section">節</option><option value="chapter">章</option><option value="subsection">小節</option></select></label>
+                                <label>進展時間粒度<select class="uk-select" name="progress_time_bucket"><option value="daily">日別</option><option value="hourly">時間別</option></select></label>
+                                <label>マインドマップ詳細度<select class="uk-select" name="mindmap_depth"><option value="chapter">章まで</option><option value="section" selected>節まで</option><option value="subsection">小節まで</option></select></label>
+                                <label>マインドマップルート<select class="uk-select" name="mindmap_root"><option value="chapter" selected>章から表示</option><option value="book">図書名から表示</option></select></label>
+                                <label>章ごと完成度 初期チャート<select class="uk-select" name="chapter_chart_style"><option value="rounded">丸棒</option><option value="horizontal">横棒</option></select></label>
+                            </div>
+                            <div class="uk-margin"><label>メモ<textarea class="uk-textarea" name="memo" rows="3" maxlength="4000"></textarea></label></div>
+                            <button class="uk-button uk-button-primary" type="submit">図書追加</button>
+                        </form>
+                    </li>
+                    <li>
+                        <p class="rpm-muted">フォーマット例：番号なしの章タイトル → インデントした節タイトル → さらにインデントした小節タイトル。既存目次は置き換えます。</p>
+                        <form method="post" enctype="multipart/form-data" action="<?php echo e(sn_admin_url('books')); ?>">
+                            <?php echo csrf_field(); ?><input type="hidden" name="action" value="import_toc">
+                            <div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label>対象図書<select class="uk-select" name="book_id"><?php foreach ($books as $b): ?><option value="<?php echo e($b['book_id']); ?>"><?php echo e($b['title']); ?>（目次<?php echo e($b['toc_count']); ?>件）</option><?php endforeach; ?></select></label><label>目次ファイル<input class="uk-input" type="file" name="toc_file" accept=".txt,.md,text/plain,text/markdown" required></label></div>
+                            <button class="uk-button uk-button-primary uk-margin-top" type="submit">目次導入</button>
+                        </form>
+                    </li>
+                    <li>
+                        <div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>ID</th><th>図書名</th><th>作者</th><th>単位</th><th>粒度</th><th>マップ</th><th>ルート</th><th>章グラフ</th><th>目次</th><th>リンク</th></tr></thead><tbody><?php foreach ($books as $b): ?><tr><td><?php echo e($b['book_id']); ?></td><td><?php echo e($b['title']); ?></td><td><?php echo e($b['author']); ?></td><td><?php echo e(match($b['progress_unit']) {'chapter'=>'章','subsection'=>'小節',default=>'節'}); ?></td><td><?php echo e(($b['progress_time_bucket'] ?? 'daily') === 'hourly' ? '時間別' : '日別'); ?></td><td><?php echo e(match($b['mindmap_depth'] ?? 'section') {'chapter'=>'章まで','subsection'=>'小節まで',default=>'節まで'}); ?></td><td><?php echo e(($b['mindmap_root'] ?? 'chapter') === 'book' ? '図書名' : '章'); ?></td><td><?php echo e(($b['chapter_chart_style'] ?? 'rounded') === 'horizontal' ? '横棒' : '丸棒'); ?></td><td><?php echo e($b['toc_count']); ?></td><td><a class="uk-button uk-button-default uk-button-small" href="#admin-edit-book-<?php echo e($b['book_id']); ?>" uk-toggle>修正</a> <a class="uk-button uk-button-text uk-button-small" href="<?php echo e(url_for('book',['id'=>$b['book_id']])); ?>">紹介</a> <a class="uk-button uk-button-text uk-button-small" href="<?php echo e(url_for('progress',['id'=>$b['book_id']])); ?>">進展</a> <a class="uk-button uk-button-text uk-button-small" href="<?php echo e(sn_admin_url('notes', ['book_id'=>$b['book_id']])); ?>">メモ</a></td></tr><?php endforeach; ?></tbody></table></div>
+                        <?php foreach ($books as $b): $mid = (int)$b['book_id']; ?>
+                            <div id="admin-edit-book-<?php echo e($mid); ?>" class="uk-modal-container rpm-modal-book-edit" uk-modal>
+                                <div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical"><button class="uk-modal-close-default" type="button" uk-close></button><h2>図書修正</h2>
+                                    <form method="post" enctype="multipart/form-data" action="<?php echo e(sn_admin_url('books')); ?>">
+                                        <?php echo csrf_field(); ?><input type="hidden" name="action" value="update_book"><input type="hidden" name="book_id" value="<?php echo e($mid); ?>">
+                                        <div class="rpm-form-preview uk-margin"><img id="admin-cover-preview-<?php echo e($mid); ?>" class="rpm-book-preview" src="<?php echo e(asset_url($b['cover_path'] ?: '/upload/book/default-cover.svg')); ?>" alt="preview"><span class="rpm-muted">新しい画像を選ぶとプレビューが切り替わります。</span></div>
+                                        <div class="uk-grid-small uk-child-width-1-2@m" uk-grid>
+                                            <label>図書名<input class="uk-input" name="title" required value="<?php echo e($b['title']); ?>"></label>
+                                            <label>作者<input class="uk-input" name="author" value="<?php echo e($b['author']); ?>"></label>
+                                            <label>発行機関<input class="uk-input" name="publisher" value="<?php echo e($b['publisher']); ?>"></label>
+                                            <label>写真<input class="uk-input" type="file" name="cover" accept="image/png,image/jpeg,image/webp" data-preview-target="#admin-cover-preview-<?php echo e($mid); ?>"></label>
+                                            <label>進展管理単位<select class="uk-select" name="progress_unit"><option value="section" <?php echo $b['progress_unit']==='section'?'selected':''; ?>>節</option><option value="chapter" <?php echo $b['progress_unit']==='chapter'?'selected':''; ?>>章</option><option value="subsection" <?php echo $b['progress_unit']==='subsection'?'selected':''; ?>>小節</option></select></label>
+                                            <label>進展時間粒度<select class="uk-select" name="progress_time_bucket"><option value="daily" <?php echo ($b['progress_time_bucket'] ?? 'daily')==='daily'?'selected':''; ?>>日別</option><option value="hourly" <?php echo ($b['progress_time_bucket'] ?? 'daily')==='hourly'?'selected':''; ?>>時間別</option></select></label>
+                                            <label>マインドマップ詳細度<select class="uk-select" name="mindmap_depth"><option value="chapter" <?php echo ($b['mindmap_depth'] ?? 'section')==='chapter'?'selected':''; ?>>章まで</option><option value="section" <?php echo ($b['mindmap_depth'] ?? 'section')==='section'?'selected':''; ?>>節まで</option><option value="subsection" <?php echo ($b['mindmap_depth'] ?? 'section')==='subsection'?'selected':''; ?>>小節まで</option></select></label>
+                                            <label>マインドマップルート<select class="uk-select" name="mindmap_root"><option value="chapter" <?php echo ($b['mindmap_root'] ?? 'chapter')==='chapter'?'selected':''; ?>>章から表示</option><option value="book" <?php echo ($b['mindmap_root'] ?? 'chapter')==='book'?'selected':''; ?>>図書名から表示</option></select></label>
+                                            <label>章ごと完成度 初期チャート<select class="uk-select" name="chapter_chart_style"><option value="rounded" <?php echo ($b['chapter_chart_style'] ?? 'rounded')==='rounded'?'selected':''; ?>>丸棒</option><option value="horizontal" <?php echo ($b['chapter_chart_style'] ?? 'rounded')==='horizontal'?'selected':''; ?>>横棒</option></select></label>
+                                        </div>
+                                        <div class="uk-margin"><label>メモ<textarea class="uk-textarea" name="memo" rows="3" maxlength="4000"><?php echo e($b['memo']); ?></textarea></label></div>
+                                        <button class="uk-button uk-button-primary" type="submit">保存</button><button class="uk-button uk-button-default uk-modal-close uk-margin-small-left" type="button">廃棄</button>
+                                    </form>
+                                    <div class="rpm-danger-zone uk-margin-large-top"><h3>危険操作</h3><p class="rpm-muted">以下の操作は取り消しできません。管理者パスワードの検証が必要です。</p><div class="rpm-reset-forms">
+                                        <form method="post" action="<?php echo e(sn_admin_url('books')); ?>" data-confirm="この図書の全ユーザー進展をリセットします。実行しますか？"><?php echo csrf_field(); ?><input type="hidden" name="action" value="reset_book_progress"><input type="hidden" name="book_id" value="<?php echo e($mid); ?>"><label>管理者パスワード<input class="uk-input" type="password" name="admin_password" autocomplete="current-password" required></label><button class="uk-button uk-button-danger uk-margin-small-top" type="submit">進展全部リセット</button></form>
+                                        <form method="post" action="<?php echo e(sn_admin_url('books')); ?>" data-confirm="この図書の全ユーザーメモをリセットします。実行しますか？"><?php echo csrf_field(); ?><input type="hidden" name="action" value="reset_book_notes"><input type="hidden" name="book_id" value="<?php echo e($mid); ?>"><label>管理者パスワード<input class="uk-input" type="password" name="admin_password" autocomplete="current-password" required></label><button class="uk-button uk-button-danger uk-margin-small-top" type="submit">メモ全部リセット</button></form>
+                                    </div></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </li>
+                </ul>
             </section>
         <?php elseif ($view === 'progress'): ?>
             <?php
@@ -370,10 +378,8 @@ $tzs = timezone_identifiers_list();
                     <label>図書<select class="uk-select" name="book_id"><option value="0">すべて</option><?php foreach ($books as $b): ?><option value="<?php echo e($b['book_id']); ?>" <?php echo $filterBookId===(int)$b['book_id']?'selected':''; ?>><?php echo e($b['title']); ?></option><?php endforeach; ?></select></label>
                     <div><button class="uk-button uk-button-primary" type="submit">フィルター</button><a class="uk-button rpm-button-soft uk-margin-small-left" href="<?php echo e(sn_admin_url('notes')); ?>">解除</a></div>
                 </form>
-                <div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>ユーザー</th><th>図書</th><th>目次</th><th>メモ</th><th>更新</th><th>操作</th></tr></thead><tbody><?php foreach ($noteRows as $n): $tocLabel = '第 ' . e((string)$n['sort_order']) . ' ' . e(toc_level_name((int)$n['level'])); ?><tr><td><?php echo e($n['login_id']); ?><?php echo $n['nickname'] ? '<br><span class="uk-text-meta">' . e($n['nickname']) . '</span>' : ''; ?></td><td><a href="<?php echo e(sn_admin_url('progress_edit', ['uid'=>$n['uid'], 'book_id'=>$n['book_id']])); ?>"><?php echo e($n['book_title']); ?></a></td><td><?php echo e(toc_level_name((int)$n['level'])); ?>：<?php echo e($n['toc_title']); ?></td><td><form class="uk-flex uk-flex-middle rpm-inline-form" method="post" action="<?php echo e(sn_admin_url('notes')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="update_progress_note"><input type="hidden" name="uid" value="<?php echo e($n['uid']); ?>"><input type="hidden" name="book_id" value="<?php echo e($n['book_id']); ?>"><input type="hidden" name="toc_id" value="<?php echo e($n['toc_id']); ?>"><input class="uk-input uk-form-small rpm-note-input" name="memo" value="<?php echo e($n['memo']); ?>" maxlength="1000"><button class="uk-button uk-button-default uk-button-small" type="submit">保存</button></form></td><td><?php echo e($n['updated_at_utc']); ?></td><td><form method="post" action="<?php echo e(sn_admin_url('notes')); ?>" onsubmit="return confirm('このメモを削除しますか？');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete_progress_note"><input type="hidden" name="uid" value="<?php echo e($n['uid']); ?>"><input type="hidden" name="book_id" value="<?php echo e($n['book_id']); ?>"><input type="hidden" name="toc_id" value="<?php echo e($n['toc_id']); ?>"><button class="uk-button uk-button-danger uk-button-small" type="submit">削除</button></form></td></tr><?php endforeach; ?></tbody></table></div>
+                <div class="uk-overflow-auto"><table class="uk-table uk-table-small uk-table-divider"><thead><tr><th>ユーザー</th><th>図書</th><th>目次</th><th>メモ</th><th>更新</th><th>操作</th></tr></thead><tbody><?php foreach ($noteRows as $n): $tocLabel = '第 ' . e((string)$n['sort_order']) . ' ' . e(toc_level_name((int)$n['level'])); ?><tr><td><?php echo e($n['login_id']); ?><?php echo $n['nickname'] ? '<br><span class="uk-text-meta">' . e($n['nickname']) . '</span>' : ''; ?></td><td><a href="<?php echo e(sn_admin_url('progress_edit', ['uid'=>$n['uid'], 'book_id'=>$n['book_id']])); ?>"><?php echo e($n['book_title']); ?></a></td><td><?php echo e(toc_level_name((int)$n['level'])); ?>：<?php echo e($n['toc_title']); ?></td><td><form class="uk-flex uk-flex-middle rpm-inline-form" method="post" action="<?php echo e(sn_admin_url('notes')); ?>"><?php echo csrf_field(); ?><input type="hidden" name="action" value="update_progress_note"><input type="hidden" name="uid" value="<?php echo e($n['uid']); ?>"><input type="hidden" name="book_id" value="<?php echo e($n['book_id']); ?>"><input type="hidden" name="toc_id" value="<?php echo e($n['toc_id']); ?>"><input class="uk-input uk-form-small rpm-note-input" name="memo" value="<?php echo e($n['memo']); ?>" maxlength="1000"><button class="uk-button uk-button-default uk-button-small" type="submit">保存</button></form></td><td><?php echo e($n['updated_at_utc']); ?></td><td><form method="post" action="<?php echo e(sn_admin_url('notes')); ?>" data-confirm="このメモを削除しますか？"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete_progress_note"><input type="hidden" name="uid" value="<?php echo e($n['uid']); ?>"><input type="hidden" name="book_id" value="<?php echo e($n['book_id']); ?>"><input type="hidden" name="toc_id" value="<?php echo e($n['toc_id']); ?>"><button class="uk-button uk-button-danger uk-button-small" type="submit">削除</button></form></td></tr><?php endforeach; ?></tbody></table></div>
             </section>
-        <?php else: ?>
-            <section class="rpm-admin-section uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>その他</h2><ul><li>HTML出力は出力バッファで一行圧縮します。</li><li>管理メニューはサブページ単位で表示します。</li><li>Nginx rewriteは deploy/nginx-shiorinote.conf を参照してください。</li></ul></section>
         <?php endif; ?>
     </div>
 </div>
