@@ -24,6 +24,7 @@
 - 全体進展バー、章ごと完成度（丸棒 / 横棒切替）、章ごと残り、進展まとめグラフ
 - 章・節・小節まで詳細度を選べるEChartsツリー型マインドマップ
 - CSPに配慮したチャート拡大プレビュー、章タブ、達成記録テーブル
+- CSPに配慮したHTMX自動保存、チャート、マインドマップ表示
 - ユーザーセンター、パスワード変更、個人情報編集、ID変更（16桁以内の半角英数字）
 - ユーザー用の図書管理ページによる自分の図書追加・目次導入・基本情報修正
 - 管理システムによる図書管理、目次導入、ユーザー管理、サイト基本設定、ユーザー別進展管理、メモまとめ管理
@@ -148,7 +149,6 @@ database-sample/03_sample_book.sql
 - 図書管理
 - ユーザー別進展管理
 - メモまとめ管理
-- その他
 
 新規登録機能は初期値OFFです。必要な場合だけ管理システムでONにしてください。
 
@@ -173,7 +173,7 @@ database-sample/03_sample_book.sql
 - `public/upload/avatar/default-avatar.svg`
 - `public/upload/book/default-cover.svg`
 
-## 既存環境をv2.4.0へ更新する場合
+## 既存環境をv2.7.0へ更新する場合
 
 既存環境で既に `config/base.inc.phtml` とDBがある場合、通常はインストーラーを使わず、ファイルを差し替えてからCLIアップグレードツールを実行してください。
 
@@ -183,7 +183,7 @@ php tool/upgrade/index.php
 
 このツールは、先に現在のデータベースを `backup/database/` へSQL形式でバックアップしてから、`database-sample/` 内の必要な `migration_v*.sql` を順番に実行します。完了すると、プロジェクトルートに `update.lock` を作成・更新し、DB更新済みバージョンを記録します。
 
-`v2.4.0` 自体のテーブル構造変更はありませんが、`v2.3.0` 未適用の環境では、ツールが `migration_v2.3.0.sql` を実行します。`migration_v2.3.0.sql` は、PHPMyAdminで出やすい `ADD COLUMN IF NOT EXISTS` の構文エラーを避ける形式に修正済みです。
+`v2.7.0` 自体のテーブル構造変更はありません。`v2.5.0` までのmigrationが未適用の環境では、ツールが必要な `migration_v*.sql` を順番に実行します。
 
 既存DBが無プレフィックスの場合は、`config/base.inc.phtml` の `db.prefix` を空文字にしてください。プレフィックスを使っている場合、手動でSQLを流すより、必ず上記CLIツールを使う方が安全です。
 
@@ -205,12 +205,12 @@ php tool/upgrade/index.php
 
 ## バージョン
 
-現在のバージョン：`v2.4.0`
+現在のバージョン：`v2.7.0`
 
 変更履歴は `CHANGELOG.md` を確認してください。
 
 
-## v2.5.0 への更新メモ
+## v2.7.0 への更新メモ
 
 既存環境を更新する場合は、ファイル差し替え後にCLIでアップグレードツールを実行してください。
 
@@ -218,4 +218,4 @@ php tool/upgrade/index.php
 php tool/upgrade/index.php
 ```
 
-v2.5.0では `books.mindmap_root` を追加します。アップグレードツールは実行前に `backup/database/` へデータベースバックアップを作成し、完了後に `update.lock` を更新します。
+v2.7.0ではテーブル構造の変更はありません。既存環境はファイル差し替え後、必要に応じて `php tool/upgrade/index.php` を実行すると `update.lock` をv2.7.0へ更新できます。

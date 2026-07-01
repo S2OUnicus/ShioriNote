@@ -156,8 +156,8 @@ function inst_make_config(array $cfg): string
     if ($tailPos === false) { throw new RuntimeException('base.sample.phtml の構造を読み取れません。'); }
     $tail = substr($sample, $tailPos);
     $db = $cfg['db'];
-    return "<?php\ndeclare(strict_types=1);\n\n/**\n * ShioriNote v2.5.0 generated config.\n * Created by installer at " . date('Y-m-d H:i:s T') . ".\n * Never commit this file to GitHub.\n */\n\nif (!defined('APP_ROOT')) {\n    define('APP_ROOT', dirname(__DIR__));\n}\n\n\$BASE_CONFIG = [\n" .
-        "    'version' => '2.5.0',\n" .
+    return "<?php\ndeclare(strict_types=1);\n\n/**\n * ShioriNote v2.7.0 generated config.\n * Created by installer at " . date('Y-m-d H:i:s T') . ".\n * Never commit this file to GitHub.\n */\n\nif (!defined('APP_ROOT')) {\n    define('APP_ROOT', dirname(__DIR__));\n}\n\n\$BASE_CONFIG = [\n" .
+        "    'version' => '2.7.0',\n" .
         "    'site_name' => " . inst_php_sq($cfg['site_name']) . ",\n" .
         "    'author' => " . inst_php_sq($cfg['author']) . ",\n" .
         "    'theme_color' => " . inst_php_sq($cfg['theme_color']) . ",\n" .
@@ -270,7 +270,7 @@ function inst_install(bool $devMode): array
     if (file_put_contents($lockFile, 'installed_at=' . gmdate('c') . "\n", LOCK_EX) === false) { throw new RuntimeException('install.lock を作成できません。'); }
     @chmod($lockFile, 0600);
     $log[] = 'install.lock を作成しました。';
-    $updateLock = "version=2.5.0\nupdated_at=" . gmdate('c') . "\nsource=installer\n";
+    $updateLock = "version=2.7.0\nupdated_at=" . gmdate('c') . "\nsource=installer\n";
     if (file_put_contents($updateLockFile, $updateLock, LOCK_EX) === false) { throw new RuntimeException('update.lock を作成できません。'); }
     @chmod($updateLockFile, 0600);
     $log[] = 'update.lock を作成しました。';

@@ -137,13 +137,26 @@ if (!function_exists('sn_toc_children_by_parent')) {
     function sn_render_progress_summary(array $user, array $book, array $bookProgress, float $overall, string $bucketType, bool $oob = false): void
     {
         $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
-        ?><div id="rpm-progress-summary"<?php echo $oobAttr; ?>><section class="uk-margin-bottom rpm-progress-head"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap"><div><h1><?php echo e($book['title']); ?></h1><p class="rpm-muted">管理単位：<?php echo e(match($book['progress_unit']) {'chapter'=>'章','subsection'=>'小節',default=>'節'}); ?> / 表示時間：<?php echo e($bucketType === 'hourly' ? '時間別' : '日別'); ?> / タイムゾーン：<?php echo e($user['timezone']); ?></p></div><?php if ($overall >= 100): ?><div class="rpm-stamp">完結</div><?php endif; ?></div><div class="rpm-progress-wrap"><progress class="uk-progress" value="<?php echo e((string)$overall); ?>" max="100"></progress><span class="rpm-progress-number"><?php echo e((string)$overall); ?>%</span></div></section></div><?php
+        $unitLabel = match($book['progress_unit']) {'chapter'=>'章','subsection'=>'小節',default=>'節'};
+        $bucketLabel = $bucketType === 'hourly' ? '時間別' : '日別';
+        ?><div id="rpm-progress-summary"<?php echo $oobAttr; ?>><section class="uk-margin-bottom rpm-progress-head"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap"><div><h1><?php echo e($book['title']); ?></h1><div class="rpm-progress-tags" aria-label="読書進展設定"><span class="rpm-progress-tag"><strong>管理単位</strong><?php echo e($unitLabel); ?></span><span class="rpm-progress-tag-separator" aria-hidden="true">/</span><span class="rpm-progress-tag"><strong>表示時間</strong><?php echo e($bucketLabel); ?></span><span class="rpm-progress-tag-separator" aria-hidden="true">/</span><span class="rpm-progress-tag"><strong>タイムゾーン</strong><?php echo e($user['timezone']); ?></span></div></div><?php if ($overall >= 100): ?><div class="rpm-stamp">完結</div><?php endif; ?></div><div class="rpm-progress-wrap"><progress class="uk-progress" value="<?php echo e((string)$overall); ?>" max="100"></progress><span class="rpm-progress-number"><?php echo e((string)$overall); ?>%</span></div></section></div><?php
     }
 
     function sn_render_progress_status(array $user, array $book, array $bookProgress, bool $oob = false): void
     {
         $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
-        ?><section id="rpm-progress-status" class="uk-card uk-card-default uk-card-body rpm-card uk-margin"><h2>進展状況</h2><div class="rpm-basic-info"><div class="rpm-info-pill"><strong>図書名</strong><?php echo e($book['title']); ?></div><div class="rpm-info-pill"><strong>開始時間</strong><?php echo e(utc_to_user($bookProgress['start_at_utc'] ?? '', $user) ?: '未設定'); ?></div><div class="rpm-info-pill"><strong>完結時間</strong><?php echo e(utc_to_user($bookProgress['completed_at_utc'] ?? '', $user) ?: '未設定'); ?></div></div></section><?php
+        ?><section id="rpm-progress-status" class="uk-card uk-card-default uk-card-body rpm-card uk-margin"<?php echo $oobAttr; ?>><h2>進展状況</h2><div class="rpm-basic-info"><div class="rpm-info-pill"><strong>図書名</strong><?php echo e($book['title']); ?></div><div class="rpm-info-pill"><strong>開始時間</strong><?php echo e(utc_to_user($bookProgress['start_at_utc'] ?? '', $user) ?: '未設定'); ?></div><div class="rpm-info-pill"><strong>完結時間</strong><?php echo e(utc_to_user($bookProgress['completed_at_utc'] ?? '', $user) ?: '未設定'); ?></div></div></section><?php
+    }
+
+
+    function sn_render_book_info_card(array $book, bool $oob = false): void
+    {
+        $oobAttr = $oob ? ' hx-swap-oob="outerHTML"' : '';
+        $cover = (string)($book['cover_path'] ?: '/upload/book/default-cover.svg');
+        $author = trim((string)($book['author'] ?? '')) !== '' ? (string)$book['author'] : '作者未設定';
+        $publisher = trim((string)($book['publisher'] ?? '')) !== '' ? (string)$book['publisher'] : '発行機関未設定';
+        $memo = trim((string)($book['memo'] ?? '')) !== '' ? (string)$book['memo'] : 'メモはまだありません。';
+        ?><section id="rpm-book-info-card" class="uk-card uk-card-default uk-card-body rpm-card rpm-book-info-card-section"<?php echo $oobAttr; ?>><h2>図書情報</h2><div class="rpm-book-info-card"><img class="rpm-book-cover-sm" src="<?php echo e(asset_url($cover)); ?>" alt="<?php echo e($book['title']); ?>"><div class="rpm-book-info-body"><h3><?php echo e($book['title']); ?></h3><p class="uk-text-meta"><?php echo e($author); ?> / <?php echo e($publisher); ?></p><p><?php echo nl2br(e($memo)); ?></p></div></div></section><?php
     }
 
     function sn_chart_card(string $title, string $chartId, string $modalId, string $modalChartId): void
@@ -207,7 +220,10 @@ if (!function_exists('sn_toc_children_by_parent')) {
             $chapterNodes[] = sn_mindmap_node($chapter, $childrenByParent, $maxLevel);
         }
         $rootMode = (string)($book['mindmap_root'] ?? 'chapter');
-        return ['name' => $rootMode === 'book' ? $book['title'] : '', 'children' => $chapterNodes, 'rootMode' => $rootMode === 'book' ? 'book' : 'chapter'];
+        if ($rootMode === 'book') {
+            return [['name' => (string)$book['title'], 'children' => $chapterNodes, 'rootMode' => 'book']];
+        }
+        return $chapterNodes;
     }
 
     function sn_render_mindmap_summary(array $book, array $toc, bool $oob = false): void
@@ -376,4 +392,4 @@ $bucketType = (string)$ctx['bucketType'];
 $chartData = (string)$ctx['chartData'];
 ?>
 <?php if ($isAdminProgress): ?><section class="uk-alert-warning rpm-admin-progress-warning" uk-alert><p>今は「<?php echo e(role_label_ja((string)($progressAdmin['role'] ?? 'admin'))); ?>」として、<?php echo e($user['login_id']); ?> さんの「<?php echo e($book['title']); ?>」を管理します。</p><p><a href="<?php echo e($progressBackUrl); ?>">ユーザー別進展管理へ戻る</a></p></section><?php endif; ?>
-<div class="rpm-progress-page"><div class="rpm-progress-top"><?php sn_render_progress_summary($user, $book, $bookProgress, $overall, $bucketType); ?></div><div id="rpm-progress-body" class="rpm-progress-layout"><aside class="rpm-progress-side"><section class="uk-card uk-card-default uk-card-body rpm-card rpm-book-info-card-section"><h2>図書情報</h2><div class="rpm-book-info-card"><img class="rpm-book-cover-sm" src="<?php echo e(asset_url($book['cover_path'] ?: '/upload/book/default-cover.svg')); ?>" alt="<?php echo e($book['title']); ?>"><div><h3><?php echo e($book['title']); ?></h3><p class="uk-text-meta"><?php echo e($book['author'] ?: '作者未設定'); ?> / <?php echo e($book['publisher'] ?: '発行機関未設定'); ?></p><p><?php echo nl2br(e($book['memo'] ?: 'メモはまだありません。')); ?></p></div></div></section><?php sn_render_chart_zone($chartData, $book); ?><?php sn_render_progress_status($user, $book, $bookProgress); ?></aside><section class="rpm-progress-main"><?php sn_render_mindmap_summary($book, $toc); ?><form id="rpm-progress-form" class="rpm-progress-form uk-card uk-card-default uk-card-body rpm-card" method="post" action="<?php echo e($progressAction); ?>" hx-post="<?php echo e($progressAction); ?>" hx-target="#rpm-autosave-status" hx-swap="innerHTML"><?php echo csrf_field(); ?><input type="hidden" name="action" value="progress_save"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap rpm-form-head"><h2>目次進展</h2><div id="rpm-autosave-status" class="rpm-autosave-status" aria-live="polite"></div></div><?php sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], $bucketType); ?></form></section></div></div>
+<div class="rpm-progress-page"><div class="rpm-progress-top"><?php sn_render_progress_summary($user, $book, $bookProgress, $overall, $bucketType); ?></div><div id="rpm-progress-body" class="rpm-progress-layout"><aside class="rpm-progress-side"><?php sn_render_book_info_card($book); ?><?php sn_render_chart_zone($chartData, $book); ?><?php sn_render_progress_status($user, $book, $bookProgress); ?></aside><section class="rpm-progress-main"><?php sn_render_mindmap_summary($book, $toc); ?><form id="rpm-progress-form" class="rpm-progress-form uk-card uk-card-default uk-card-body rpm-card" method="post" action="<?php echo e($progressAction); ?>" hx-post="<?php echo e($progressAction); ?>" hx-target="#rpm-autosave-status" hx-swap="innerHTML"><?php echo csrf_field(); ?><input type="hidden" name="action" value="progress_save"><div class="uk-flex uk-flex-between uk-flex-middle uk-flex-wrap rpm-form-head"><h2>目次進展</h2><div id="rpm-autosave-status" class="rpm-autosave-status" aria-live="polite"></div></div><?php sn_render_toc_section($user, $book, $bookProgress, $toc, $targetItems, $progressByToc, $ctx['summaryRows'], $bucketType); ?></form></section></div></div>

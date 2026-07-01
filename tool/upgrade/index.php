@@ -6,7 +6,7 @@ declare(strict_types=1);
  * CLI only: php tool/upgrade/index.php
  */
 
-const SHIORINOTE_TARGET_VERSION = '2.5.0';
+const SHIORINOTE_TARGET_VERSION = '2.7.0';
 const SHIORINOTE_ENGLISH_NAME = 'ShioriNote';
 
 if (PHP_SAPI !== 'cli') {
